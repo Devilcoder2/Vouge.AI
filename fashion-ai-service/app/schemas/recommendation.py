@@ -60,7 +60,13 @@ class SavedOutfitResponse(BaseModel):
 class GapAnalysisResponse(BaseModel):
     item_name: str
     category: str
+    subcategory: str
+    style: str
+    fit: str
+    formality: int
     primary_color: str
+    primary_color_hex: str
+    pattern: str
     unlocked_outfits_count: int
     reasoning: str
 
