@@ -5,6 +5,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app.config import settings
 from app.routes.processing import router as processing_router
+from app.routes.recommendation import router as recommendation_router
 
 # Configure detailed runtime logging to standard output
 logging.basicConfig(
@@ -38,6 +39,7 @@ app.mount("/processed", StaticFiles(directory=str(settings.PROCESSED_DIR)), name
 
 # Register core application routing endpoints
 app.include_router(processing_router)
+app.include_router(recommendation_router)
 
 @app.on_event("startup")
 async def startup_event():

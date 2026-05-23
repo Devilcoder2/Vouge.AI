@@ -1,6 +1,7 @@
 import uuid
-from sqlalchemy import Column, String, Integer, ARRAY, DateTime, Numeric, Boolean, func
+from sqlalchemy import Column, String, Integer, ARRAY, DateTime, Numeric, Boolean, ForeignKey, func
 from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.orm import relationship
 from app.database.session import Base
 
 class ClothingItem(Base):
@@ -46,3 +47,35 @@ class ClothingItem(Base):
     embedding_path = Column(String, nullable=False)
     
     created_at = Column(DateTime(timezone=True), default=func.now())
+
+class SavedOutfit(Base):
+    """
+    SQLAlchemy model representing a saved outfit curated by a user.
+    """
+    __tablename__ = "saved_outfits"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(String, nullable=False, default="default_user")
+    name = Column(String, nullable=False)
+    occasion = Column(String, nullable=False)
+    season = Column(String, nullable=False)
+    score = Column(Integer, nullable=False)
+    reasoning = Column(String, nullable=True)
+    created_at = Column(DateTime(timezone=True), default=func.now())
+
+    # Relationship to intermediate items
+    items = relationship("SavedOutfitItem", back_populates="outfit", cascade="all, delete-orphan", lazy="selectin")
+
+class SavedOutfitItem(Base):
+    """
+    SQLAlchemy intermediate model mapping SavedOutfits to ClothingItems.
+    """
+    __tablename__ = "saved_outfit_items"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    outfit_id = Column(UUID(as_uuid=True), ForeignKey("saved_outfits.id", ondelete="CASCADE"), nullable=False)
+    clothing_item_id = Column(UUID(as_uuid=True), ForeignKey("clothing_items.id", ondelete="CASCADE"), nullable=False)
+
+    # Relationships
+    outfit = relationship("SavedOutfit", back_populates="items")
+    clothing_item = relationship("ClothingItem", lazy="selectin")
