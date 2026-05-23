@@ -48,7 +48,10 @@ class FashionClassifier:
         Analyze this clothing image and extract the following structured attributes with confidence scores.
         
         A. Single vs Multi-Item Detection:
-        Analyze if this image contains a single isolated clothing item (e.g., just one shirt, just one pair of jeans) or multiple items (e.g., an outfit flat lay with tops and bottoms, a selfie containing shoes, pants, and shirts, or multiple items). Count how many distinct items you see and record it in `detected_items_count`.
+        Analyze if this image contains a single isolated clothing item or multiple separate items.
+        CRITICAL RULE: A single clothing garment that is multi-colored, patterned, checkered, striped, or has different color blocks (e.g., a checkered flannel shirt, a striped tee, a color-block jacket, a patterned dress) is strictly ONE item (detected_items_count = 1).
+        Do NOT count different colors, patterns, or fabric blocks of the same garment as multiple items.
+        Only count it as multiple items (detected_items_count > 1) if there are completely separate, independent, detached clothing pieces (for example: a flat lay with both a separate shirt and separate pants, or an outfit set featuring a top, bottom, and shoes).
         
         B. Taxonomy Matching:
         Verify and classify according to our master fashion taxonomy constraints:
