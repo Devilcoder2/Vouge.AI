@@ -1,8 +1,11 @@
 import logging
+import time
 from pathlib import Path
 from fastapi import UploadFile, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.future import select
 from PIL import Image
+import numpy as np
 
 from app.config import settings
 from app.utils.file_handler import FileHandler
@@ -30,66 +33,161 @@ class FashionIntelligencePipeline:
         processed_filepath = None
         embedding_filepath = None
         
+        # Track start time of entire pipeline execution
+        pipeline_start = time.perf_counter()
+        
         try:
             # 1. Image Upload: Save incoming raw upload to disk
             logger.info(f"Pipeline started for raw upload: {file.filename}")
+            upload_start = time.perf_counter()
             raw_filepath = await FileHandler.save_upload(file)
-            logger.info(f"Raw image saved locally: {raw_filepath}")
+            upload_latency = (time.perf_counter() - upload_start) * 1000
+            logger.info(f"Raw image saved locally: {raw_filepath} (time: {upload_latency:.2f}ms)")
 
             # 2. Background Removal: Remove background to get transparent PNG
-            # Load raw bytes for rembg U2-Net
+            bg_removal_start = time.perf_counter()
             with open(raw_filepath, "rb") as f:
                 raw_bytes = f.read()
             
             transparent_img = BackgroundRemover.remove_background(raw_bytes)
+            bg_removal_latency = (time.perf_counter() - bg_removal_start) * 1000
+            logger.info(f"Successfully removed background (time: {bg_removal_latency:.2f}ms)")
 
             # 3. Image Preprocessing: Crop transparent margins, pad to square, resize to 512x512
+            preprocess_start = time.perf_counter()
             processed_img = ImagePreprocessor.preprocess_image(transparent_img, target_size=512)
 
             # Save transparent standardized 512x512 image in the processed folder
             processed_filename = f"{raw_filepath.stem}_processed.png"
             processed_filepath = settings.PROCESSED_DIR / processed_filename
             processed_img.save(processed_filepath, format="PNG")
-            logger.info(f"Processed transparent image written to disk: {processed_filepath}")
+            preprocess_latency = (time.perf_counter() - preprocess_start) * 1000
+            logger.info(f"Processed transparent image written to disk: {processed_filepath} (time: {preprocess_latency:.2f}ms)")
 
             # 4. Fashion Classification: Feed transparent garment into Gemini Vision
             # Use raw filename as a hint in case we run in mock mode
+            classify_start = time.perf_counter()
             extracted_metadata = self.classifier.classify_garment(processed_img, filename_hint=file.filename)
-            logger.info("Fashion classification step completed successfully.")
+            classify_latency = (time.perf_counter() - classify_start) * 1000
+            logger.info(f"Fashion classification step completed successfully (time: {classify_latency:.2f}ms).")
+
+            # --- Multi-Item Validation Check ---
+            # Reject uploads containing more than 1 item to maintain wardrobe quality
+            if extracted_metadata.detected_items_count > 1:
+                logger.warning(
+                    f"Multi-item validation failed: Detected {extracted_metadata.detected_items_count} clothing items."
+                )
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Detected {extracted_metadata.detected_items_count} clothing items. Please upload one item only."
+                )
 
             # 5. Color Extraction: OpenCV LAB KMeans (Returns Names + Precise Hexes)
+            color_start = time.perf_counter()
             primary_color, secondary_colors, primary_hex, secondary_hexes = ColorExtractor.extract_colors(processed_img)
+            color_latency = (time.perf_counter() - color_start) * 1000
+            logger.info(f"Color extraction completed: Primary hex: {primary_hex} (time: {color_latency:.2f}ms)")
 
             # 6. Embedding Generation: PyTorch local CLIP
+            embedding_start = time.perf_counter()
             embedding = self.embedding_service.generate_image_embedding(processed_img)
             
             # Save raw numpy array binary file locally
             embedding_filepath = FashionEmbeddingService.save_embedding_to_disk(embedding, raw_filepath.stem)
+            embedding_latency = (time.perf_counter() - embedding_start) * 1000
+            logger.info(f"CLIP embedding generated and saved (time: {embedding_latency:.2f}ms)")
+
+            # --- Duplicate Detection (Cosine Similarity) ---
+            duplicate_start = time.perf_counter()
+            is_duplicate = False
+            duplicate_of_id = None
+            
+            # Retrieve user's existing wardrobe items
+            result = await db.execute(select(ClothingItem))
+            existing_items = result.scalars().all()
+            
+            if existing_items and len(existing_items) > 0:
+                # L2 normalize the new embedding vector
+                new_vector = embedding / np.linalg.norm(embedding)
+                
+                for item in existing_items:
+                    if item.embedding_path and Path(item.embedding_path).exists():
+                        try:
+                            # Load existing embedding from disk
+                            ext_vector = np.load(item.embedding_path)
+                            # L2 normalize
+                            ext_vector_norm = ext_vector / np.linalg.norm(ext_vector)
+                            
+                            # Calculate Cosine Similarity
+                            similarity = float(np.dot(new_vector, ext_vector_norm))
+                            
+                            # If similarity is above 0.95 threshold, flag it
+                            if similarity > 0.95:
+                                is_duplicate = True
+                                duplicate_of_id = item.id
+                                logger.warning(
+                                    f"Likely duplicate detected! Matches item {item.id} "
+                                    f"with Cosine Similarity: {similarity:.4f}"
+                                )
+                                break
+                        except Exception as sim_err:
+                            logger.error(f"Error computing similarity against item {item.id}: {str(sim_err)}")
+            
+            duplicate_latency = (time.perf_counter() - duplicate_start) * 1000
 
             # 7. Database Persistence: Save full structured details to PostgreSQL
-            # We store relative or absolute paths (here we store paths as string)
+            db_start = time.perf_counter()
             db_item = ClothingItem(
                 original_image_path=str(raw_filepath),
                 processed_image_path=str(processed_filepath),
-                category=extracted_metadata.category,
-                subcategory=extracted_metadata.subcategory,
-                primary_color=extracted_metadata.primary_color, # Natively parsed by Vision LLM
-                primary_color_hex=primary_hex, # Math centroid hex
-                secondary_colors=extracted_metadata.secondary_colors, # Natively parsed by Vision LLM
-                secondary_colors_hex=secondary_hexes, # Math centroid hexes
-                fit=extracted_metadata.fit,
-                style=extracted_metadata.style,
+                category=extracted_metadata.category.value,
+                confidence_category=extracted_metadata.category.confidence,
+                subcategory=extracted_metadata.subcategory.value,
+                confidence_subcategory=extracted_metadata.subcategory.confidence,
+                primary_color=extracted_metadata.primary_color,
+                primary_color_hex=primary_hex,
+                secondary_colors=extracted_metadata.secondary_colors,
+                secondary_colors_hex=secondary_hexes,
+                fit=extracted_metadata.fit.value,
+                confidence_fit=extracted_metadata.fit.confidence,
+                style=extracted_metadata.style.value,
+                confidence_style=extracted_metadata.style.confidence,
                 formality=extracted_metadata.formality,
                 seasons=extracted_metadata.seasons,
-                pattern=extracted_metadata.pattern,
+                pattern=extracted_metadata.pattern.value,
+                confidence_pattern=extracted_metadata.pattern.confidence,
+                prompt_version=self.classifier.PROMPT_VERSION,
+                detected_items_count=extracted_metadata.detected_items_count,
+                is_duplicate=is_duplicate,
+                duplicate_of_id=duplicate_of_id,
                 embedding_path=str(embedding_filepath)
             )
 
             db.add(db_item)
             await db.commit()
             await db.refresh(db_item)
+            db_latency = (time.perf_counter() - db_start) * 1000
             
-            logger.info(f"Pipeline succeeded! Saved clothing item to DB with UUID: {db_item.id}")
+            total_latency = (time.perf_counter() - pipeline_start) * 1000
+            
+            # --- Latency & Pipeline Traceability Logging ---
+            logger.info(
+                f"\n=== PIPELINE EXECUTION SUCCESS TRACE ===\n"
+                f"File Processed: {file.filename}\n"
+                f"Item Database ID: {db_item.id}\n"
+                f"Stage Latencies:\n"
+                f"  - Upload Save:       {upload_latency:.2f}ms\n"
+                f"  - BG Removal (rembg): {bg_removal_latency:.2f}ms\n"
+                f"  - Image Preprocess:  {preprocess_latency:.2f}ms\n"
+                f"  - Gemini Classifier: {classify_latency:.2f}ms\n"
+                f"  - Color Extractor:   {color_latency:.2f}ms\n"
+                f"  - CLIP Embedding:    {embedding_latency:.2f}ms\n"
+                f"  - Duplicate Check:   {duplicate_latency:.2f}ms\n"
+                f"  - DB Persistence:    {db_latency:.2f}ms\n"
+                f"Total Pipeline Latency: {total_latency:.2f}ms\n"
+                f"========================================="
+            )
+            
             return db_item
 
         except Exception as e:

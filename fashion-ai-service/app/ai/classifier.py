@@ -4,11 +4,14 @@ from PIL import Image
 from google import genai
 from google.genai import types
 from app.config import settings
-from app.schemas.processing import FashionMetadataExtract
+from app.schemas.processing import FashionMetadataExtract, ConfidenceStringField
+from app.ai.fashion_taxonomy import CATEGORIES, SUBCATEGORIES, FITS, STYLES, PATTERNS, STANDARD_COLORS
 
 logger = logging.getLogger("fashion-ai-service")
 
 class FashionClassifier:
+    PROMPT_VERSION = "v1.0.0"
+
     def __init__(self):
         # Check if a live, active API key is provided
         self.api_key_configured = (
@@ -38,18 +41,33 @@ class FashionClassifier:
             logger.warning("Operating in MOCK MODE: returning mock metadata.")
             return self._generate_mock_metadata(filename_hint)
 
-        prompt = """
-        You are an expert fashion stylist and inventory catalog manager.
-        Analyze this garment image (on a transparent background). Extract its fashion attributes:
-        1. Core Category: Must be one of: 'Tops', 'Bottoms', 'Outerwear', 'Dresses', 'Shoes', 'Accessories'.
-        2. Subcategory: Extract the exact fashion subcategory (e.g. 'T-Shirts & Tanks', 'Jeans', 'Boots', etc.).
-        3. Fit: Choose 'slim', 'standard', or 'oversized'.
-        4. Style: Identify the aesthetic (e.g. 'minimalist', 'streetwear', 'classic', 'formal', 'athleisure').
-        5. Formality: Rate from 1 (loungewear/active) to 10 (black tie formal).
-        6. Seasons: Select matching seasons (e.g. ['summer'], ['winter', 'autumn']).
-        7. Pattern: Specify (e.g. 'solid', 'striped', 'plaid', 'graphic', 'floral', 'distressed').
-        8. Primary Color: The single main dominant color of the clothing item. Choose ONLY from: 'white', 'black', 'grey', 'beige', 'cream', 'navy', 'blue', 'light_blue', 'olive', 'green', 'red', 'maroon', 'pink', 'orange', 'yellow', 'purple', 'brown'.
-        9. Secondary Colors: Any minor or accent colors visible on the garment. Choose from the same standard color list (leave empty if the garment is a solid single color).
+        prompt = f"""
+        You are an expert fashion stylist, AI vision auditor, and database catalog integrity manager.
+        We are running prompt version: {self.PROMPT_VERSION}.
+        
+        Analyze this clothing image and extract the following structured attributes with confidence scores.
+        
+        A. Single vs Multi-Item Detection:
+        Analyze if this image contains a single isolated clothing item (e.g., just one shirt, just one pair of jeans) or multiple items (e.g., an outfit flat lay with tops and bottoms, a selfie containing shoes, pants, and shirts, or multiple items). Count how many distinct items you see and record it in `detected_items_count`.
+        
+        B. Taxonomy Matching:
+        Verify and classify according to our master fashion taxonomy constraints:
+        1. `category`: One of: {CATEGORIES}. You must assign an estimated confidence score between 0.0 and 1.0 (how sure you are of this category).
+        2. `subcategory`: Must map appropriately to the chosen category. Look at the subcategories for your chosen category from the allowed lists:
+           - Tops: {SUBCATEGORIES['Tops']}
+           - Bottoms: {SUBCATEGORIES['Bottoms']}
+           - Outerwear: {SUBCATEGORIES['Outerwear']}
+           - Dresses: {SUBCATEGORIES['Dresses']}
+           - Shoes: {SUBCATEGORIES['Shoes']}
+           - Accessories: {SUBCATEGORIES['Accessories']}
+           Assign a confidence score (0.0 to 1.0) to this subcategory.
+        3. `fit`: One of: {FITS}. Assign a confidence score (0.0 to 1.0).
+        4. `style`: One of: {STYLES}. Assign a confidence score (0.0 to 1.0).
+        5. `pattern`: One of: {PATTERNS}. Assign a confidence score (0.0 to 1.0).
+        6. `formality`: Estimate a formal index integer between 1 (loungewear/pajamas) and 10 (black tie formal).
+        7. `seasons`: Select all applicable seasons from: ['spring', 'summer', 'autumn', 'winter'].
+        8. `primary_color`: The single dominant fabric color. Choose strictly from: {STANDARD_COLORS}.
+        9. `secondary_colors`: Any minor accent color(s) visible on the garment. Choose from the same standard color list.
         """
 
         # Step 1: Attempt generation with primary model (gemini-2.0-flash)
@@ -101,52 +119,63 @@ class FashionClassifier:
         """Generates smart mock classification estimates based on image filename hints."""
         hint = filename_hint.lower()
         
+        # Determine items count based on hint
+        items_count = 1
+        if any(w in hint for w in ["outfit", "flatlay", "set", "combo", "suit"]):
+            items_count = 3
+        elif "two" in hint or "double" in hint:
+            items_count = 2
+
         if any(w in hint for w in ["shirt", "tee", "top", "hoodie", "sweater", "sweatshirt"]):
             return FashionMetadataExtract(
-                category="Tops",
-                subcategory="T-Shirts & Tanks" if "tee" in hint or "shirt" in hint else "Hoodies & Sweatshirts",
-                fit="oversized" if "oversized" in hint else "standard",
-                style="streetwear" if "streetwear" in hint else "minimalist",
+                category=ConfidenceStringField(value="Tops", confidence=0.98),
+                subcategory=ConfidenceStringField(value="T-Shirts & Tanks" if "tee" in hint or "shirt" in hint else "Hoodies & Sweatshirts", confidence=0.95),
+                fit=ConfidenceStringField(value="oversized" if "oversized" in hint else "standard", confidence=0.90),
+                style=ConfidenceStringField(value="streetwear" if "streetwear" in hint else "minimalist", confidence=0.88),
                 formality=3 if "tee" in hint else 4,
                 seasons=["spring", "summer"],
-                pattern="solid",
+                pattern=ConfidenceStringField(value="solid", confidence=0.99),
                 primary_color="white",
-                secondary_colors=[]
+                secondary_colors=[],
+                detected_items_count=items_count
             )
         elif any(w in hint for w in ["pant", "jeans", "trouser", "shorts", "skirt", "bottom"]):
             return FashionMetadataExtract(
-                category="Bottoms",
-                subcategory="Jeans" if "jeans" in hint else "Chinos & Trousers",
-                fit="standard",
-                style="classic",
+                category=ConfidenceStringField(value="Bottoms", confidence=0.98),
+                subcategory=ConfidenceStringField(value="Jeans" if "jeans" in hint else "Chinos & Trousers", confidence=0.95),
+                fit=ConfidenceStringField(value="standard", confidence=0.92),
+                style=ConfidenceStringField(value="classic", confidence=0.90),
                 formality=4 if "jeans" in hint else 5,
                 seasons=["spring", "summer", "autumn", "winter"],
-                pattern="solid",
+                pattern=ConfidenceStringField(value="solid", confidence=0.99),
                 primary_color="blue" if "jeans" in hint else "grey",
-                secondary_colors=[]
+                secondary_colors=[],
+                detected_items_count=items_count
             )
         elif any(w in hint for w in ["shoe", "boot", "sneaker", "loafer", "heel", "footwear"]):
             return FashionMetadataExtract(
-                category="Shoes",
-                subcategory="Sneakers" if "sneaker" in hint else "Boots",
-                fit="standard",
-                style="streetwear" if "sneaker" in hint else "classic",
+                category=ConfidenceStringField(value="Shoes", confidence=0.99),
+                subcategory=ConfidenceStringField(value="Sneakers" if "sneaker" in hint else "Boots", confidence=0.97),
+                fit=ConfidenceStringField(value="standard", confidence=0.95),
+                style=ConfidenceStringField(value="streetwear" if "sneaker" in hint else "classic", confidence=0.90),
                 formality=3 if "sneaker" in hint else 6,
                 seasons=["spring", "summer", "autumn", "winter"],
-                pattern="solid",
+                pattern=ConfidenceStringField(value="solid", confidence=0.99),
                 primary_color="black" if "boot" in hint else "white",
-                secondary_colors=[]
+                secondary_colors=[],
+                detected_items_count=items_count
             )
         
         # Absolute generic fallback
         return FashionMetadataExtract(
-            category="Tops",
-            subcategory="T-Shirts & Tanks",
-            fit="standard",
-            style="minimalist",
+            category=ConfidenceStringField(value="Tops", confidence=0.95),
+            subcategory=ConfidenceStringField(value="T-Shirts & Tanks", confidence=0.90),
+            fit=ConfidenceStringField(value="standard", confidence=0.92),
+            style=ConfidenceStringField(value="minimalist", confidence=0.85),
             formality=3,
             seasons=["spring", "summer"],
-            pattern="solid",
+            pattern=ConfidenceStringField(value="solid", confidence=0.99),
             primary_color="white",
-            secondary_colors=[]
+            secondary_colors=[],
+            detected_items_count=items_count
         )

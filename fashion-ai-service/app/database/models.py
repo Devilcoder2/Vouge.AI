@@ -1,5 +1,5 @@
 import uuid
-from sqlalchemy import Column, String, Integer, ARRAY, DateTime, func
+from sqlalchemy import Column, String, Integer, ARRAY, DateTime, Numeric, Boolean, func
 from sqlalchemy.dialects.postgresql import UUID
 from app.database.session import Base
 
@@ -26,6 +26,21 @@ class ClothingItem(Base):
     formality = Column(Integer, nullable=False)
     seasons = Column(ARRAY(String), nullable=False, default=list)
     pattern = Column(String, nullable=False)
+    
+    # Confidence metrics for LLM metadata extraction
+    confidence_category = Column(Numeric(3, 2), nullable=True)
+    confidence_subcategory = Column(Numeric(3, 2), nullable=True)
+    confidence_fit = Column(Numeric(3, 2), nullable=True)
+    confidence_style = Column(Numeric(3, 2), nullable=True)
+    confidence_pattern = Column(Numeric(3, 2), nullable=True)
+    
+    # Traceability & validation metrics
+    prompt_version = Column(String(50), nullable=False, default="v1.0.0")
+    detected_items_count = Column(Integer, nullable=False, default=1)
+    
+    # Duplicate checking
+    is_duplicate = Column(Boolean, nullable=False, default=False)
+    duplicate_of_id = Column(UUID(as_uuid=True), nullable=True)
     
     # Path to saved local float32 numpy vector array (.npy file)
     embedding_path = Column(String, nullable=False)
