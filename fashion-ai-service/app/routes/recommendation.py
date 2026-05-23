@@ -7,7 +7,7 @@ from typing import List
 from datetime import datetime, timezone
 
 from app.database.session import get_db
-from app.database.models import ClothingItem, SavedOutfit, SavedOutfitItem
+from app.database.models import ClothingItem, SavedOutfit, SavedOutfitItem, UserProfile, UserFeedback
 from app.schemas.recommendation import (
     GenerateOutfitsRequest,
     GenerateOutfitsResponse,
@@ -17,7 +17,10 @@ from app.schemas.recommendation import (
     SaveOutfitRequest,
     SavedOutfitResponse,
     GapAnalysisResponse,
-    VersatilityResponse
+    VersatilityResponse,
+    UserProfileSetupRequest,
+    UserProfileResponse,
+    UserFeedbackRequest
 )
 from app.recommendation.generators.candidate_generator import CandidateGenerator
 from app.recommendation.scorers.outfit_scorer import OutfitScorer
@@ -26,6 +29,12 @@ from app.recommendation.explainers.outfit_explainer import OutfitExplainer
 from app.recommendation.evaluators.quality_evaluator import QualityEvaluator
 from app.recommendation.engines.gap_analysis import GapAnalysisEngine
 from app.recommendation.engines.versatility_engine import VersatilityEngine
+from app.recommendation.engines.body_engine import BodyTypeEngine
+from app.recommendation.engines.persona_engine import StylePersonaEngine
+from app.recommendation.engines.feedback_engine import FeedbackEngine
+from app.recommendation.engines.embedding_similarity_engine import EmbeddingSimilarityEngine
+from app.recommendation.engines.silhouette_engine import SilhouetteEngine
+
 
 logger = logging.getLogger("fashion-ai-service")
 router = APIRouter(prefix="/recommendations", tags=["Outfit Recommendations"])
@@ -53,6 +62,48 @@ async def generate_outfits(
         })
         
     try:
+        # Fetch user profile and feedback history to personalize recommendations
+        try:
+            profile_res = await db.execute(select(UserProfile).where(UserProfile.user_id == payload.user_id))
+            db_profile = profile_res.scalar_one_or_none()
+        except Exception as profile_err:
+            logger.warning(f"Unable to load UserProfile from database (using fallback): {str(profile_err)}")
+            db_profile = None
+        
+        if db_profile:
+            profile_dict = {
+                "height_cm": db_profile.height_cm,
+                "body_archetype": db_profile.body_archetype,
+                "fit_preference": db_profile.fit_preference,
+                "style_persona": db_profile.style_persona,
+                "avoided_colors": db_profile.avoided_colors,
+                "favorite_styles": db_profile.favorite_styles
+            }
+        else:
+            profile_dict = {
+                "height_cm": None,
+                "body_archetype": "rectangle",
+                "fit_preference": "standard",
+                "style_persona": "minimalist",
+                "avoided_colors": [],
+                "favorite_styles": []
+            }
+            
+        try:
+            fb_res = await db.execute(select(UserFeedback).where(UserFeedback.user_id == payload.user_id))
+            db_feedbacks = fb_res.scalars().all()
+        except Exception as fb_err:
+            logger.warning(f"Unable to load UserFeedback from database (using fallback): {str(fb_err)}")
+            db_feedbacks = []
+            
+        feedback_list = [
+            {"feedback_type": fb.feedback_type, "outfit_item_ids": fb.outfit_item_ids}
+            for fb in db_feedbacks
+            if hasattr(fb, "feedback_type")
+        ]
+
+
+
         # 2. Generate matching template combinations with early pruning
         candidates = CandidateGenerator.generate_candidates(
             db_items, payload.occasion, payload.season
@@ -66,18 +117,57 @@ async def generate_outfits(
                 "verdict": "Lacks category/formality matches. Upload more diverse clothes to unlock outfits."
             })
             
-        # 3. Apply high-fidelity ensemble scoring
+        # 3. Apply high-fidelity ensemble scoring incorporating all personalization & visual engines
         scored_candidates = []
         for cand in candidates:
             score_res = OutfitScorer.score_outfit(
                 cand["items"], payload.occasion, payload.season
             )
+            base_score_01 = score_res["total_score"] / 100.0
+            
+            # A. Visual harmony similarity & pooled outfit embedding
+            harmony_res = EmbeddingSimilarityEngine.calculate_visual_harmony(cand["items"])
+            harmony_score = harmony_res["score"]
+            outfit_embedding = harmony_res["outfit_embedding"]
+            
+            # B. Body archetype proportions
+            body_res = BodyTypeEngine.calculate_body_compatibility(cand["items"], profile_dict)
+            body_score = body_res["score"]
+            
+            # C. Style persona matching
+            persona_res = StylePersonaEngine.calculate_persona_compatibility(cand["items"], profile_dict["style_persona"])
+            persona_score = persona_res["score"]
+            
+            # D. User interaction feedback adjustments
+            feedback_res = FeedbackEngine.calculate_feedback_adjustments(cand["items"], profile_dict, feedback_list)
+            feedback_adj = feedback_res["adjustment_factor"]
+            
+            # E. Silhouette proportions balance
+            silhouette_res = SilhouetteEngine.calculate_silhouette_balance(cand["items"], payload.occasion, profile_dict["style_persona"])
+            silhouette_score = silhouette_res["score"]
+            
+            # F. Pool all personal styling reasons
+            combined_why = []
+            combined_why.extend(body_res["why_selected"])
+            combined_why.extend(persona_res["why_selected"])
+            combined_why.extend(feedback_res["why_selected"])
+            combined_why.extend(silhouette_res["why_selected"])
+            
+            if not combined_why:
+                combined_why.append("Balanced neutral aesthetic silhouette compatibility.")
+                
+            # Compile final personalized score bounded between 0 and 100
+            final_score_val = round(base_score_01 * harmony_score * body_score * persona_score * feedback_adj * silhouette_score * 100)
+            final_score_val = max(0, min(100, final_score_val))
+
             scored_candidates.append({
                 "items": cand["items"],
                 "template_name": cand["template_name"],
-                "total_score": score_res["total_score"],
+                "total_score": final_score_val,
                 "breakdown": score_res["breakdown"],
-                "reasons": score_res["reasons"]
+                "reasons": score_res["reasons"],
+                "why_selected": list(set(combined_why)),
+                "outfit_embedding": outfit_embedding
             })
             
         # 4. Filter and diversify (prevents visual redundancy)
@@ -123,11 +213,14 @@ async def generate_outfits(
                         occasion_score=outfit["breakdown"]["occasion_score"],
                         formality_score=outfit["breakdown"]["formality_score"],
                         season_score=outfit["breakdown"]["season_score"]
-                    )
+                    ),
+                    why_selected=outfit.get("why_selected", []),
+                    outfit_embedding=outfit.get("outfit_embedding")
                 )
             )
             
         return GenerateOutfitsResponse(outfits=response_outfits, diversity_eval=diversity_eval)
+
         
     except Exception as e:
         logger.error(f"Failed to generate outfits: {str(e)}", exc_info=True)
@@ -340,3 +433,78 @@ async def get_versatility_report(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Versatility analysis failed: {str(e)}"
         )
+
+@router.post("/profile", response_model=UserProfileResponse, status_code=status.HTTP_200_OK)
+async def setup_or_update_profile(
+    payload: UserProfileSetupRequest,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Sets up or updates the user's body type and styling persona profile.
+    """
+    try:
+        # Check if profile already exists
+        result = await db.execute(select(UserProfile).where(UserProfile.user_id == payload.user_id))
+        profile = result.scalar_one_or_none()
+        
+        if not profile:
+            profile = UserProfile(
+                id=uuid4(),
+                user_id=payload.user_id,
+                height_cm=payload.height_cm,
+                body_archetype=payload.body_archetype,
+                fit_preference=payload.fit_preference,
+                style_persona=payload.style_persona,
+                avoided_colors=payload.avoided_colors,
+                favorite_styles=payload.favorite_styles
+            )
+            db.add(profile)
+        else:
+            if payload.height_cm is not None:
+                profile.height_cm = payload.height_cm
+            if payload.body_archetype is not None:
+                profile.body_archetype = payload.body_archetype
+            if payload.fit_preference is not None:
+                profile.fit_preference = payload.fit_preference
+            if payload.style_persona is not None:
+                profile.style_persona = payload.style_persona
+            if payload.avoided_colors is not None:
+                profile.avoided_colors = payload.avoided_colors
+            if payload.favorite_styles is not None:
+                profile.favorite_styles = payload.favorite_styles
+                
+        await db.commit()
+        await db.refresh(profile)
+        return profile
+    except Exception as e:
+        logger.error(f"Error updating profile: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to setup user profile: {str(e)}"
+        )
+
+@router.post("/feedback", status_code=status.HTTP_201_CREATED)
+async def submit_user_feedback(
+    payload: UserFeedbackRequest,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Logs user feedback interaction (likes, saves, dismissals) for recommendations learning.
+    """
+    try:
+        feedback = UserFeedback(
+            id=uuid4(),
+            user_id=payload.user_id,
+            outfit_item_ids=[str(iid) for iid in payload.outfit_item_ids],
+            feedback_type=payload.feedback_type
+        )
+        db.add(feedback)
+        await db.commit()
+        return {"message": "Feedback submitted successfully."}
+    except Exception as e:
+        logger.error(f"Error logging feedback: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to log feedback: {str(e)}"
+        )
+

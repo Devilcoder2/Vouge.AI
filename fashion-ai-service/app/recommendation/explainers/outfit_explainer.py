@@ -135,13 +135,17 @@ class OutfitExplainer:
                 })
                 
                 # Construct finalized output object
-                final_outfits.append({
+                outfit_data = {
                     "score": int(expl.get("reranked_score", cand["total_score"])),
                     "items": cand["items"],
                     "reasoning": expl.get("reasoning", "A balanced monochrome palette with clean silhouette."),
                     "template_name": cand["template_name"],
                     "breakdown": cand["breakdown"]
-                })
+                }
+                for k, v in cand.items():
+                    if k not in outfit_data:
+                        outfit_data[k] = v
+                final_outfits.append(outfit_data)
                 
             # Re-sort list based on updated LLM scores
             final_outfits.sort(key=lambda x: x["score"], reverse=True)
@@ -191,12 +195,17 @@ class OutfitExplainer:
                     f"harmonizes beautifully with the {bottom_desc}, creating a timeless {season} aesthetic that is effortless to wear."
                 )
                 
-            final_outfits.append({
+            outfit_data = {
                 "score": cand["total_score"],
                 "items": items,
                 "reasoning": reasoning,
                 "template_name": cand["template_name"],
                 "breakdown": cand["breakdown"]
-            })
+            }
+            for k, v in cand.items():
+                if k not in outfit_data:
+                    outfit_data[k] = v
+            final_outfits.append(outfit_data)
             
         return final_outfits
+

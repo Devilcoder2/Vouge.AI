@@ -32,6 +32,8 @@ class SingleOutfitResponse(BaseModel):
     reasoning: str
     template_name: str
     breakdown: OutfitScoreBreakdown
+    why_selected: List[str] = Field(default_factory=list)
+    outfit_embedding: Optional[List[float]] = None
 
 class GenerateOutfitsResponse(BaseModel):
     outfits: List[SingleOutfitResponse]
@@ -78,3 +80,30 @@ class VersatilityResponse(BaseModel):
     versatility_score: int
     usage_count: int
     reasoning: str
+
+class UserProfileSetupRequest(BaseModel):
+    user_id: str
+    height_cm: Optional[int] = None
+    body_archetype: Optional[str] = None  # pear_shape, rectangle, athletic, stocky, lean_tall
+    fit_preference: Optional[str] = None  # slim, standard, oversized
+    style_persona: Optional[str] = None   # minimalist, old_money, streetwear, quiet_luxury, etc.
+    avoided_colors: List[str] = Field(default_factory=list)
+    favorite_styles: List[str] = Field(default_factory=list)
+
+class UserProfileResponse(BaseModel):
+    user_id: str
+    height_cm: Optional[int] = None
+    body_archetype: Optional[str] = None
+    fit_preference: Optional[str] = None
+    style_persona: Optional[str] = None
+    avoided_colors: List[str] = Field(default_factory=list)
+    favorite_styles: List[str] = Field(default_factory=list)
+    
+    class Config:
+        from_attributes = True
+
+class UserFeedbackRequest(BaseModel):
+    user_id: str
+    outfit_item_ids: List[UUID]
+    feedback_type: str  # like, save, dismiss
+

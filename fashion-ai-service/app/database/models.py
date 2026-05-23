@@ -79,3 +79,32 @@ class SavedOutfitItem(Base):
     # Relationships
     outfit = relationship("SavedOutfit", back_populates="items")
     clothing_item = relationship("ClothingItem", lazy="selectin")
+
+class UserProfile(Base):
+    """
+    SQLAlchemy model representing a user's styling profile, including body archetype, fit, and style preferences.
+    """
+    __tablename__ = "user_profiles"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(String, unique=True, nullable=False)
+    height_cm = Column(Integer, nullable=True)
+    body_archetype = Column(String, nullable=True)  # pear_shape, rectangle, athletic, stocky, lean_tall
+    fit_preference = Column(String, nullable=True)  # slim, standard, oversized
+    style_persona = Column(String, nullable=True)   # minimalist, old_money, streetwear, quiet_luxury, etc.
+    avoided_colors = Column(ARRAY(String), nullable=False, default=list)
+    favorite_styles = Column(ARRAY(String), nullable=False, default=list)
+    created_at = Column(DateTime(timezone=True), default=func.now())
+
+class UserFeedback(Base):
+    """
+    SQLAlchemy model representing a user's outfit styling feedback (likes, saves, dismissals).
+    """
+    __tablename__ = "user_feedbacks"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(String, nullable=False)
+    outfit_item_ids = Column(ARRAY(String), nullable=False)  # array of garment UUID strings
+    feedback_type = Column(String, nullable=False)  # like, save, dismiss
+    created_at = Column(DateTime(timezone=True), default=func.now())
+
