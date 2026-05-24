@@ -1,6 +1,7 @@
 import uuid
-from sqlalchemy import Column, String, Integer, ARRAY, DateTime, Numeric, Boolean, ForeignKey, func
-from sqlalchemy.dialects.postgresql import UUID
+from datetime import date
+from sqlalchemy import Column, String, Integer, ARRAY, Date, DateTime, Numeric, Boolean, ForeignKey, Text, func
+from sqlalchemy.dialects.postgresql import UUID, JSON
 from sqlalchemy.orm import relationship
 from app.database.session import Base
 
@@ -110,3 +111,80 @@ class UserFeedback(Base):
     feedback_type = Column(String, nullable=False)  # like, save, dismiss
     created_at = Column(DateTime(timezone=True), default=func.now())
 
+
+# ── Phase 3A: Authentication & Identity ──────────────────────────────────────
+
+class User(Base):
+    """
+    Core user identity model for Vouge.AI.
+    Stores account credentials, body metrics, and style preferences.
+    """
+    __tablename__ = "users"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    email = Column(String(320), unique=True, nullable=False, index=True)
+    username = Column(String(50), unique=True, nullable=False, index=True)
+    hashed_password = Column(String, nullable=False)
+
+    # Personal details
+    first_name = Column(String(100), nullable=True)
+    last_name = Column(String(100), nullable=True)
+    gender = Column(String(30), nullable=True)          # male, female, non_binary, prefer_not_to_say
+    date_of_birth = Column(Date, nullable=True)
+
+    # Body metrics
+    height_cm = Column(Integer, nullable=True)
+    weight_kg = Column(Numeric(5, 2), nullable=True)
+    body_type = Column(String(50), nullable=True)       # pear_shape, rectangle, athletic, stocky, lean_tall
+    preferred_fit = Column(String(20), nullable=True)   # slim, standard, oversized
+
+    # Style intelligence
+    style_personas = Column(ARRAY(String), nullable=False, default=list)  # minimalist, old_money, etc.
+    avoided_colors = Column(ARRAY(String), nullable=False, default=list)
+    climate_region = Column(String(30), nullable=True)  # tropical, temperate, cold, arid
+
+    # Account state
+    onboarding_completed = Column(Boolean, nullable=False, default=False)
+    is_active = Column(Boolean, nullable=False, default=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    # Relationships
+    refresh_tokens = relationship("RefreshToken", back_populates="user", cascade="all, delete-orphan")
+    sessions = relationship("UserSession", back_populates="user", cascade="all, delete-orphan")
+
+
+class RefreshToken(Base):
+    """
+    Stores hashed refresh tokens for secure session rotation.
+    The raw token is sent to the client exactly once and never persisted.
+    """
+    __tablename__ = "refresh_tokens"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    token_hash = Column(String(64), nullable=False, unique=True, index=True)  # SHA-256 hex
+    device_name = Column(String(200), nullable=True)
+    ip_address = Column(String(45), nullable=True)       # supports IPv6
+    expires_at = Column(DateTime(timezone=True), nullable=False)
+    revoked = Column(Boolean, nullable=False, default=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    # Relationship
+    user = relationship("User", back_populates="refresh_tokens")
+
+
+class UserSession(Base):
+    """
+    Tracks active user sessions for device management and audit logging.
+    """
+    __tablename__ = "user_sessions"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    device_info = Column(String(500), nullable=True)
+    last_active_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    # Relationship
+    user = relationship("User", back_populates="sessions")
