@@ -26,9 +26,9 @@ export const Header = ({ title = "VOGUE.AI", showBack = false }) => {
         <div className="flex items-center gap-12">
           <Link
             to="/app"
-            className="font-display text-2xl tracking-[0.3em] text-on-surface hover:opacity-90 transition-opacity uppercase font-bold"
+            className="font-display text-2xl tracking-[0.4em] luxury-text-gradient hover:opacity-90 transition-opacity uppercase font-bold"
           >
-            {title}
+            VOGUE.AI
           </Link>
           <nav className="flex items-center gap-8">
             {navLinks.map((link) => {
@@ -95,8 +95,8 @@ export const Header = ({ title = "VOGUE.AI", showBack = false }) => {
           )}
         </div>
         <div className="flex flex-col items-center">
-          <Link to="/app" className="font-display text-lg tracking-[0.3em] text-on-surface uppercase font-bold">
-            {title}
+          <Link to="/app" className="font-display text-lg tracking-[0.2em] luxury-text-gradient uppercase font-bold animate-fade-in">
+            VOGUE.AI
           </Link>
           <span className="text-[10px] uppercase tracking-[0.2em] text-tertiary font-semibold -mt-1">
             Welcome back, Alex
