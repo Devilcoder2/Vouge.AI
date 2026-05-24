@@ -1,5 +1,117 @@
 import React, { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { CardContainer, CardBody, CardItem } from "@/components/ui/3d-card";
+
+// Premium dynamic lens distortion and spotlight character hover effect
+const LensHeading = ({ line1, line2, inline = false, isH1 = false, className = "", style = {}, justifyClass = "justify-center md:justify-start" }) => {
+  const [hoveredChar, setHoveredChar] = useState(null); // { lineIndex, charIndex }
+  const [coords, setCoords] = useState({ x: 0, y: 0 });
+  const [isHovered, setIsHovered] = useState(false);
+
+  const handleMouseMove = (e) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    setCoords({ x, y });
+    setIsHovered(true);
+  };
+
+  const handleMouseLeave = () => {
+    setIsHovered(false);
+    setHoveredChar(null);
+  };
+
+  const renderLine = (text, lineIndex, extraClass = "") => {
+    const chars = Array.from(text);
+    return (
+      <span className={`inline-block whitespace-nowrap ${extraClass}`}>
+        {chars.map((char, charIndex) => {
+          const isSpace = char === " ";
+          
+          let scale = 1;
+          let color = "inherit";
+          let shadow = "none";
+
+          if (hoveredChar && hoveredChar.lineIndex === lineIndex) {
+            const dist = Math.abs(hoveredChar.charIndex - charIndex);
+            if (dist === 0) {
+              scale = 1.35;
+              color = "rgba(255, 255, 255, 1)";
+              shadow = "0 0 15px rgba(255, 255, 255, 0.6), 0 0 30px var(--color-primary)";
+            } else if (dist === 1) {
+              scale = 1.2;
+              color = "rgba(235, 235, 235, 0.9)";
+              shadow = "0 0 8px rgba(255, 255, 255, 0.3)";
+            } else if (dist === 2) {
+              scale = 1.08;
+              color = "rgba(210, 210, 210, 0.85)";
+            }
+          }
+
+          return (
+            <span
+              key={charIndex}
+              onMouseEnter={() => !isSpace && setHoveredChar({ lineIndex, charIndex })}
+              onMouseMove={() => !isSpace && hoveredChar?.charIndex !== charIndex && setHoveredChar({ lineIndex, charIndex })}
+              className="inline-block transition-all duration-200 ease-out select-none"
+              style={{
+                transform: `scale(${scale}) translateY(${scale > 1 ? -(scale - 1) * 10 : 0}px)`,
+                color: color,
+                textShadow: shadow,
+                padding: isSpace ? "0 0.1em" : "0 0.02em",
+                transformOrigin: "bottom center",
+              }}
+            >
+              {isSpace ? "\u00A0" : char}
+            </span>
+          );
+        })}
+      </span>
+    );
+  };
+
+  const HeadingTag = isH1 ? "h1" : "h2";
+
+  return (
+    <HeadingTag
+      className={`${className} relative cursor-default select-none`}
+      style={style}
+      onMouseMove={handleMouseMove}
+      onMouseLeave={handleMouseLeave}
+    >
+      {/* soft radial spotlight background glow behind text */}
+      {isHovered && (
+        <span
+          className="absolute inset-0 pointer-events-none transition-opacity duration-500 rounded-full blur-2xl"
+          style={{
+            background: `radial-gradient(150px circle at ${coords.x}px ${coords.y}px, rgba(200, 198, 197, 0.08) 0%, transparent 100%)`,
+            zIndex: -1,
+          }}
+        />
+      )}
+      
+      {inline ? (
+        <span className={`flex flex-wrap items-center gap-[0.2em] ${justifyClass}`}>
+          {line1 && renderLine(line1, 0)}
+          {line2 && renderLine(line2, 1, "italic font-extrabold text-on-surface")}
+        </span>
+      ) : (
+        <>
+          {line1 && (
+            <span className={line2 ? "block mb-1 md:mb-2" : "block"}>
+              {renderLine(line1, 0)}
+            </span>
+          )}
+          {line2 && (
+            <span className="block">
+              {renderLine(line2, 1, "italic font-extrabold text-on-surface")}
+            </span>
+          )}
+        </>
+      )}
+    </HeadingTag>
+  );
+};
 
 export const Landing = () => {
   const navigate = useNavigate();
@@ -18,7 +130,7 @@ export const Landing = () => {
     e.currentTarget.style.background = "rgba(255, 255, 255, 0.02)";
   };
 
-  // Interaction scroll triggers and parallax effects
+  // Interaction scroll triggers (excluding parallax)
   useEffect(() => {
     const observerOptions = {
       threshold: 0.15,
@@ -43,24 +155,6 @@ export const Landing = () => {
     const revealElements = document.querySelectorAll(".reveal");
     revealElements.forEach((el) => observer.observe(el));
 
-    const handleScroll = () => {
-      const scrolled = window.pageYOffset;
-      const parallaxImages = document.querySelectorAll(".parallax-img");
-
-      parallaxImages.forEach((img) => {
-        const speed = 0.15;
-        const rect = img.parentElement.getBoundingClientRect();
-        const visible = rect.top < window.innerHeight && rect.bottom > 0;
-
-        if (visible) {
-          const yPos = -(scrolled * speed);
-          img.style.transform = `translateY(${yPos % 50}px) scale(1.1)`;
-        }
-      });
-    };
-
-    window.addEventListener("scroll", handleScroll);
-
     // Initial check for reduced motion preferences
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
       document.querySelectorAll(".bar-reveal").forEach((bar) => {
@@ -72,42 +166,41 @@ export const Landing = () => {
 
     return () => {
       revealElements.forEach((el) => observer.unobserve(el));
-      window.removeEventListener("scroll", handleScroll);
     };
   }, []);
 
   return (
     <div className="bg-background text-on-background font-body-md overflow-x-hidden bg-shimmer min-h-screen">
       {/* Top Navigation */}
-      <header className="fixed top-0 left-0 w-full z-50 bg-surface/90 backdrop-blur-xl border-b border-white/5 h-24">
+      <header className="fixed top-0 left-0 w-full z-50 bg-surface/90 backdrop-blur-xl border-b border-white/5 h-16">
         <nav className="flex justify-between items-center w-full px-margin-mobile md:px-margin-desktop h-full max-w-container-max mx-auto">
           <a
-            className="font-headline-md text-headline-md tracking-widest uppercase text-on-surface"
+            className="font-display text-2xl md:text-3xl font-extrabold tracking-[0.2em] uppercase text-on-surface hover:opacity-90 transition-opacity"
             href="#home"
           >
             VOGUE.AI
           </a>
           <div className="hidden md:flex items-center gap-12">
             <a
-              className="font-body-md text-body-md text-on-surface-variant hover:text-primary transition-all duration-300"
+              className="font-body-md text-[11px] uppercase tracking-widest font-semibold text-on-surface-variant hover:text-primary transition-all duration-300"
               href="#home"
             >
               Home
             </a>
             <a
-              className="font-body-md text-body-md text-on-surface-variant hover:text-primary transition-all duration-300"
+              className="font-body-md text-[11px] uppercase tracking-widest font-semibold text-on-surface-variant hover:text-primary transition-all duration-300"
               href="#features"
             >
               Features
             </a>
             <a
-              className="font-body-md text-body-md text-on-surface-variant hover:text-primary transition-all duration-300"
+              className="font-body-md text-[11px] uppercase tracking-widest font-semibold text-on-surface-variant hover:text-primary transition-all duration-300"
               href="#pricing"
             >
               Pricing
             </a>
             <a
-              className="font-body-md text-body-md text-on-surface-variant hover:text-primary transition-all duration-300"
+              className="font-body-md text-[11px] uppercase tracking-widest font-semibold text-on-surface-variant hover:text-primary transition-all duration-300"
               href="#footer"
             >
               Footer
@@ -115,7 +208,7 @@ export const Landing = () => {
           </div>
           <button
             onClick={() => navigate("/app")}
-            className="bg-on-surface text-surface px-8 py-3 font-label-sm text-label-sm hover:opacity-80 transition-all active:scale-95 duration-300 cursor-pointer"
+            className="bg-on-surface text-surface px-6 py-2.5 font-label-sm text-xs font-bold uppercase tracking-widest hover:opacity-80 transition-all active:scale-95 duration-300 cursor-pointer"
           >
             Get Started
           </button>
@@ -124,14 +217,15 @@ export const Landing = () => {
 
       {/* Hero Section */}
       <section
-        className="relative min-h-screen flex flex-col justify-end pb-32 pt-24 parallax-wrap"
+        className="relative min-h-screen flex flex-col justify-end pb-24 pt-32 parallax-wrap"
         id="home"
       >
         <div className="absolute inset-0 z-0">
           <img
-            alt="A cinematic, high-fashion editorial shot"
-            className="w-full h-full object-cover opacity-60 hero-mask parallax-img"
-            src="https://lh3.googleusercontent.com/aida-public/AB6AXuAwwLcDs8_DUH0QmR_2bbHB72MMnUajVf-I_yzCKyL52jtmuip4fUUGqTYonztxyzb6kC9UiwswXlpyGdKIvsFeOCdDQydmsZEG5HbTHr025FV7PGmh8CVSK1x0O9CdXLbnFm6cc918bJxnHomRhnBw3xbkhKowGBqh7bh8XyluiUd-jnB8PrYAbGKiyeyL4mg8Z1hZeueemLQp6ukJRnP7IxU4fyM011FY-roc8BDiZKltI2qHnpLe8dppivXws9Ivj0vkfuYIp5G9"
+            alt="A cinematic, high-fashion editorial shot of model wearing luxury coat"
+            className="w-full h-full object-cover opacity-60 hero-mask"
+            style={{ objectPosition: "center 18%" }}
+            src="/assets/fashion_hero_bg.png"
           />
         </div>
         <div className="relative z-10 px-margin-mobile md:px-margin-desktop max-w-container-max mx-auto w-full">
@@ -142,20 +236,21 @@ export const Landing = () => {
             >
               Augmented Fashion Intelligence
             </span>
-            <h1
-              className="font-display-lg text-display-lg-mobile md:text-display-lg text-on-surface leading-tight mb-8 hero-reveal"
-              style={{ animationDelay: "0.3s" }}
-            >
-              The Future of <br />
-              <span className="italic font-normal">Personal Style.</span>
-            </h1>
+            <LensHeading
+              isH1={true}
+              line1="The Future of"
+              line2="Personal Style."
+              className="font-display text-4xl sm:text-5xl md:text-7xl font-extrabold tracking-tight text-on-surface leading-[1.08] mb-8 hero-reveal"
+            />
             <p
-              className="font-body-lg text-body-lg text-on-surface-variant max-w-2xl mb-12 hero-reveal"
+              className="font-body-lg text-body-lg text-on-surface-variant max-w-2xl mb-12 hero-reveal leading-relaxed"
               style={{ animationDelay: "0.5s" }}
             >
-              A sophisticated AI ecosystem designed to digitize your wardrobe and
-              augment your fashion intelligence with precision analytics and generative
-              vision.
+              A sophisticated AI ecosystem designed to{" "}
+                digitize your wardrobe
+              and augment your{" "}
+                fashion intelligence
+              with precision analytics and generative vision.
             </p>
             <div
               className="flex flex-wrap gap-6 items-center hero-reveal"
@@ -187,10 +282,11 @@ export const Landing = () => {
               <span className="font-label-sm text-label-sm text-primary mb-4 block">
                 01 — DIGITIZATION
               </span>
-              <h2 className="font-headline-lg text-headline-lg-mobile md:text-headline-lg mb-6 leading-tight">
-                Your Closet, <br />
-                Cloud-Sync'd.
-              </h2>
+              <LensHeading
+                line1="Your Closet,"
+                line2="Cloud-Sync'd."
+                className="font-display text-3xl md:text-5xl font-extrabold tracking-tight leading-[1.1] mb-6"
+              />
               <p className="font-body-md text-on-surface-variant mb-8 leading-relaxed">
                 Transform physical garments into high-fidelity digital assets. Our
                 proprietary AI automatically removes backgrounds and identifies textile
@@ -218,24 +314,28 @@ export const Landing = () => {
                 </li>
               </ul>
             </div>
-            <div className="md:col-span-7 order-1 md:order-2 parallax-wrap">
-              <div className="relative aspect-[4/3] bg-surface-container overflow-hidden group rounded-xl">
-                <img
-                  alt="Scanning digital interface"
-                  className="w-full h-full object-cover grayscale brightness-75 group-hover:scale-105 transition-transform duration-1000 parallax-img"
-                  src="https://lh3.googleusercontent.com/aida-public/AB6AXuDEZYusF-y6VoJWopZ918BPL_DP_nPlisIHNjGTs8q7pI2rJT4QYdL58P_qIyweeoPcaivymXWnUM4W9pE5EX6Y7g-6Oxi5oKib-wuYNLnYyJYXOPhVt9gZo0xaD4skeDQlK7c6-ADLxcCjvzY_LOj2JjPtK8ML9C8IBcGZf3SvFr5Kxi5sf4dy8g5b86XFT444z0EQbnyP7qI240wUnaMtiUtdLwR9Dux9YXbnUBvxgaw3W2YRxUP5jx4RDYSvIbumrb13OGSpeiy5"
-                />
-                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                  <div className="w-64 h-64 border border-primary/20 bg-white/5 backdrop-blur-md flex flex-col items-center justify-center p-6 text-center animate-float rounded-xl">
-                    <span className="material-symbols-outlined text-primary text-4xl mb-2">
-                      scan
-                    </span>
-                    <span className="font-label-sm uppercase tracking-widest text-[10px]">
-                      Processing Textile...
-                    </span>
+            <div className="md:col-span-7 order-1 md:order-2">
+              <CardContainer containerClassName="w-full py-0 select-none">
+                <CardBody className="relative w-full aspect-[4/3] bg-surface-container overflow-hidden rounded-xl">
+                  <CardItem translateZ="60" className="absolute inset-0 w-full h-full">
+                    <img
+                      alt="Scanning digital interface showing textile weave analyze"
+                      className="w-full h-full object-cover grayscale brightness-75 block"
+                      src="/assets/closet_scan_feature.png"
+                    />
+                  </CardItem>
+                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                    <div className="w-64 h-64 border border-primary/20 bg-white/5 backdrop-blur-md flex flex-col items-center justify-center p-6 text-center animate-float rounded-xl">
+                      <span className="material-symbols-outlined text-primary text-4xl mb-2">
+                        scan
+                      </span>
+                      <span className="font-label-sm uppercase tracking-widest text-[10px]">
+                        Processing Textile...
+                      </span>
+                    </div>
                   </div>
-                </div>
-              </div>
+                </CardBody>
+              </CardContainer>
             </div>
           </div>
         </section>
@@ -247,9 +347,12 @@ export const Landing = () => {
               <span className="font-label-sm text-label-sm text-primary mb-4 block">
                 02 — CONVERSATIONAL AI
               </span>
-              <h2 className="font-headline-lg text-headline-lg-mobile md:text-headline-lg leading-tight">
-                The Stylist That Knows You.
-              </h2>
+              <LensHeading
+                line1="The Stylist"
+                line2="That Knows You."
+                className="font-display text-3xl md:text-5xl font-extrabold tracking-tight leading-[1.1]"
+                style={{ textAlign: "center" }}
+              />
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
               {/* Card 1 */}
@@ -283,7 +386,11 @@ export const Landing = () => {
               </div>
 
               {/* Card 2 */}
-              <div className="md:col-span-1 bg-surface-container-high p-10 flex flex-col border border-white/5 hover:border-primary/20 transition-all duration-500 hover:scale-105 rounded-xl">
+              <div
+                className="glass-card p-10 flex flex-col justify-between min-h-[400px] rounded-xl"
+                onMouseMove={handleMouseMove}
+                onMouseLeave={handleMouseLeave}
+              >
                 <div className="flex-grow space-y-6">
                   <div className="bg-surface p-4 max-w-[80%] rounded-tr-xl rounded-br-xl border-l-2 border-primary animate-float">
                     <p className="font-body-md text-sm italic">
@@ -311,13 +418,35 @@ export const Landing = () => {
               </div>
 
               {/* Card 3 */}
-              <div className="relative overflow-hidden border border-white/5 group hover:scale-105 transition-all duration-700 parallax-wrap rounded-xl min-h-[400px]">
+              <div
+                className="glass-card relative overflow-hidden min-h-[400px] rounded-xl flex flex-col justify-end p-10 group"
+                onMouseMove={(e) => {
+                  handleMouseMove(e);
+                  const overlay = e.currentTarget.querySelector(".spotlight-overlay");
+                  if (overlay) {
+                    const rect = e.currentTarget.getBoundingClientRect();
+                    const x = e.clientX - rect.left;
+                    const y = e.clientY - rect.top;
+                    overlay.style.background = `radial-gradient(600px circle at ${x}px ${y}px, rgba(255,255,255,0.06), transparent 40%)`;
+                    overlay.style.opacity = "1";
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  handleMouseLeave(e);
+                  const overlay = e.currentTarget.querySelector(".spotlight-overlay");
+                  if (overlay) {
+                    overlay.style.background = "transparent";
+                    overlay.style.opacity = "0";
+                  }
+                }}
+              >
                 <img
-                  alt="Fashion accessories"
-                  className="w-full h-full object-cover brightness-50 grayscale group-hover:scale-110 group-hover:brightness-75 transition-all duration-1000 parallax-img absolute inset-0"
-                  src="https://lh3.googleusercontent.com/aida-public/AB6AXuCVt7Dk6LzSQuctVLdB4fUX7kOy6uau9dMxQe1owy64gQ9vY5Mt7-nv3-e158hYeq2x1FcKIJHuaJ_Bd6MoXpdNfFIdniU5R9MyHr2_bmTHGj5SsLBweJUSn1YfE_yPRDb4dlCsp_P83yihxw12_GRh5rlLL1qeoI7kE216TNzI_bGUPqjshftUrfTltKWlFNIo_VHu_Jc3G9_KKRCgal4tcv5xc8YKYkfXLS-GERPa4d6greV3K8XXlWKJuCDuL8BSB3SXPs6xQivK"
+                  alt="Fashion accessories flatlay styling"
+                  className="w-full h-full object-cover brightness-50 grayscale absolute inset-0 pointer-events-none transition-transform duration-700 group-hover:scale-105"
+                  src="/assets/curation_collage_feature.png"
                 />
-                <div className="absolute bottom-10 left-10 right-10 z-10">
+                <div className="spotlight-overlay absolute inset-0 pointer-events-none transition-opacity duration-300 opacity-0 z-5" />
+                <div className="relative z-10">
                   <h3 className="font-headline-md text-on-surface text-xl font-medium">
                     Curation Engine
                   </h3>
@@ -337,9 +466,12 @@ export const Landing = () => {
               <span className="font-label-sm text-label-sm text-primary mb-4 block">
                 03 — ANALYTICS
               </span>
-              <h2 className="font-headline-lg text-headline-lg-mobile md:text-headline-lg leading-tight">
-                Fashion, Decoded.
-              </h2>
+              <LensHeading
+                line1="Fashion,"
+                line2="Decoded."
+                inline={true}
+                className="font-display text-3xl md:text-5xl font-extrabold tracking-tight leading-[1.1]"
+              />
             </div>
             <div className="md:col-span-4 text-right">
               <button
@@ -351,7 +483,11 @@ export const Landing = () => {
             </div>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
-            <div className="glass-card p-8 border-l-4 border-primary rounded-r-xl">
+            <div
+              className="glass-card p-8 border-l-4 border-primary rounded-r-xl"
+              onMouseMove={handleMouseMove}
+              onMouseLeave={handleMouseLeave}
+            >
               <span className="text-3xl font-headline-md block mb-2 font-semibold">
                 94%
               </span>
@@ -365,7 +501,11 @@ export const Landing = () => {
                 ></div>
               </div>
             </div>
-            <div className="glass-card p-8 border-l-4 border-outline rounded-r-xl">
+            <div
+              className="glass-card p-8 border-l-4 border-outline rounded-r-xl"
+              onMouseMove={handleMouseMove}
+              onMouseLeave={handleMouseLeave}
+            >
               <div className="flex gap-2 mb-2.5">
                 <div className="w-4 h-4 bg-surface-container-highest rounded-[2px]"></div>
                 <div className="w-4 h-4 bg-on-primary-container rounded-[2px]"></div>
@@ -381,7 +521,11 @@ export const Landing = () => {
                 ></div>
               </div>
             </div>
-            <div className="glass-card p-8 border-l-4 border-primary rounded-r-xl">
+            <div
+              className="glass-card p-8 border-l-4 border-primary rounded-r-xl"
+              onMouseMove={handleMouseMove}
+              onMouseLeave={handleMouseLeave}
+            >
               <span className="text-3xl font-headline-md block mb-2 font-semibold">
                 $4.20
               </span>
@@ -395,7 +539,11 @@ export const Landing = () => {
                 ></div>
               </div>
             </div>
-            <div className="glass-card p-8 border-l-4 border-outline rounded-r-xl">
+            <div
+              className="glass-card p-8 border-l-4 border-outline rounded-r-xl"
+              onMouseMove={handleMouseMove}
+              onMouseLeave={handleMouseLeave}
+            >
               <span className="text-3xl font-headline-md block mb-2 font-semibold">
                 78%
               </span>
@@ -419,20 +567,29 @@ export const Landing = () => {
               <div className="md:col-span-7">
                 <div className="relative grid grid-cols-2 gap-4">
                   <div className="space-y-4">
-                    <div className="bg-surface-container-highest aspect-[3/4] overflow-hidden group parallax-wrap rounded-xl">
-                      <img
-                        alt="Model shot"
-                        className="w-full h-full object-cover opacity-80 group-hover:scale-110 transition-transform duration-1000 parallax-img"
-                        src="https://lh3.googleusercontent.com/aida-public/AB6AXuC4ACozDMUF9VhJhKTAA8UhCPAL7G8p7_YV3Vx9FRvWJCr1p_acLSEgAP3NBOB14yqJCF7FzUJPE-TlGcS5NcP2c9z1gICJqfjGWRsFvzl2CxGWcw2X106rt3HDNDm7uluKsbAroEPaA-fhh74KI_qyhNQJqgFQ4bd_pNBvsjlX1EgsmQYniR9epV-YnOlfCSvjkguH7e47xDXCQhY-q6VQhVmxe31rauxEy5ZNmp9jGnlUQQF720TF_kSuT0itRpF-HHBcxqzfABsk"
-                      />
-                    </div>
-                    <div className="bg-surface-container-highest aspect-square overflow-hidden group parallax-wrap rounded-xl">
-                      <img
-                        alt="Chelsea boots"
-                        className="w-full h-full object-cover opacity-80 group-hover:scale-110 transition-transform duration-1000 parallax-img"
-                        src="https://lh3.googleusercontent.com/aida-public/AB6AXuCIeqiplE_DNYSpHtH9xIcTCpJrYxw0hY1tCkMFi5y3pfpyFCO1_sltlueYKuq2SXT20orl1yMOzDd89-a6DsFLfOJISkHVst4QCckh-br3tPRRfLqdO4tcL9vJ3G1yMPyDnnzwa4PzUxrzsVNvsplwIG52S_I1RAVrHzG_la_NRha3IFx0WkJ6gc-lGuk8E58jKd2MJXR4NcdWVosuYJIMamu7Wp78JhfRIfvHRqH9eDDk3gAzBf4okZLy-dvhLxvW4erScwQ_GzHR"
-                      />
-                    </div>
+                    <CardContainer containerClassName="w-full py-0 select-none">
+                      <CardBody className="relative w-full aspect-[3/4] bg-surface-container-highest overflow-hidden rounded-xl">
+                        <CardItem translateZ="60" className="absolute inset-0 w-full h-full">
+                          <img
+                            alt="High-end editorial fashion portrait"
+                            className="w-full h-full object-cover opacity-80 block"
+                            src="/assets/fashion_portrait_gap.png"
+                          />
+                        </CardItem>
+                      </CardBody>
+                    </CardContainer>
+
+                    <CardContainer containerClassName="w-full py-0 select-none">
+                      <CardBody className="relative w-full aspect-square bg-surface-container-highest overflow-hidden rounded-xl">
+                        <CardItem translateZ="60" className="absolute inset-0 w-full h-full">
+                          <img
+                            alt="Sleek black Chelsea leather boots"
+                            className="w-full h-full object-cover opacity-80 block"
+                            src="/assets/chelsea_boots_gap.png"
+                          />
+                        </CardItem>
+                      </CardBody>
+                    </CardContainer>
                   </div>
                   <div className="space-y-4 mt-12">
                     <div className="bg-primary/10 aspect-square flex items-center justify-center p-8 border border-primary/20 animate-float rounded-xl">
@@ -446,13 +603,18 @@ export const Landing = () => {
                         </p>
                       </div>
                     </div>
-                    <div className="bg-surface-container-highest aspect-[3/4] overflow-hidden group parallax-wrap rounded-xl">
-                      <img
-                        alt="Arrangement of clothing"
-                        className="w-full h-full object-cover opacity-80 group-hover:scale-110 transition-transform duration-1000 parallax-img"
-                        src="https://lh3.googleusercontent.com/aida-public/AB6AXuBwPtrWSe3LkEKXLmXtnxr03TwofdkI8ZpR3rqI_Bm3Qu4KMK3R4G0uo5JglnrNect2mTNEgPI-GP1fAZgRuUTdnaFTYH14DLpPnVzDaOJs2b2pBh62QfE1AlZ4NjOWk6-VIHqHfUMsPqvSDqc1cuxqzclWgqknmvKJxXiNzEwwzbbQ7vEHk0ATJbUiRRCpJafBq4StqSia1tb0ldbXvdyl3P4yHQHzgrhRQppN4756YEKRMSJoD9v3-_FU5xxUzqjPXQcf48VcsdYY"
-                      />
-                    </div>
+
+                    <CardContainer containerClassName="w-full py-0 select-none">
+                      <CardBody className="relative w-full aspect-[3/4] bg-surface-container-highest overflow-hidden rounded-xl">
+                        <CardItem translateZ="60" className="absolute inset-0 w-full h-full">
+                          <img
+                            alt="Minimalist collection of folded neutral clothing"
+                            className="w-full h-full object-cover opacity-80 block"
+                            src="/assets/clothing_layout_gap.png"
+                          />
+                        </CardItem>
+                      </CardBody>
+                    </CardContainer>
                   </div>
                 </div>
               </div>
@@ -460,9 +622,12 @@ export const Landing = () => {
                 <span className="font-label-sm text-label-sm text-primary mb-4 block">
                   04 — GAP ANALYSIS
                 </span>
-                <h2 className="font-headline-lg text-headline-lg-mobile md:text-headline-lg mb-8 leading-tight">
-                  Unlock the Look.
-                </h2>
+                <LensHeading
+                  line1="Unlock"
+                  line2="the Look."
+                  inline={true}
+                  className="font-display text-3xl md:text-5xl font-extrabold tracking-tight leading-[1.1] mb-8"
+                />
                 <p className="font-body-lg text-on-surface-variant mb-10 leading-relaxed">
                   Our intelligence engine identifies the missing pieces in your
                   collection. Instead of generic shopping, VOGUE.AI suggests specific
@@ -471,7 +636,9 @@ export const Landing = () => {
                 <div className="space-y-6">
                   <div
                     onClick={() => navigate("/app")}
-                    className="p-6 bg-white/5 border border-white/5 hover:border-primary/40 hover:scale-[1.02] transition-all duration-500 cursor-pointer shadow-lg hover:shadow-primary/5 rounded-xl"
+                    className="glass-card p-6 border border-white/5 hover:border-primary/40 hover:scale-[1.02] transition-all duration-500 cursor-pointer shadow-lg hover:shadow-primary/5 rounded-xl"
+                    onMouseMove={handleMouseMove}
+                    onMouseLeave={handleMouseLeave}
                   >
                     <h4 className="font-headline-md text-lg mb-1 font-medium">
                       Smart Shoppable Links
@@ -482,7 +649,9 @@ export const Landing = () => {
                   </div>
                   <div
                     onClick={() => navigate("/app")}
-                    className="p-6 bg-white/5 border border-white/5 hover:border-primary/40 hover:scale-[1.02] transition-all duration-500 cursor-pointer shadow-lg hover:shadow-primary/5 rounded-xl"
+                    className="glass-card p-6 border border-white/5 hover:border-primary/40 hover:scale-[1.02] transition-all duration-500 cursor-pointer shadow-lg hover:shadow-primary/5 rounded-xl"
+                    onMouseMove={handleMouseMove}
+                    onMouseLeave={handleMouseLeave}
                   >
                     <h4 className="font-headline-md text-lg mb-1 font-medium">
                       Outfit Multipliers
@@ -505,9 +674,13 @@ export const Landing = () => {
             <span className="font-label-sm text-label-sm text-primary mb-4 block">
               INVESTMENT
             </span>
-            <h2 className="font-headline-lg text-display-lg-mobile md:text-headline-lg mb-8 leading-tight">
-              Tailored for Every Aspiration.
-            </h2>
+            <LensHeading
+              line1="Tailored for"
+              line2="Every Aspiration."
+              inline={true}
+              justifyClass="justify-center"
+              className="font-display text-3xl md:text-5xl font-extrabold tracking-tight leading-[1.1] mb-8"
+            />
             {/* Billing Toggle */}
             <div className="flex items-center justify-center gap-4 mt-8 select-none">
               <span
