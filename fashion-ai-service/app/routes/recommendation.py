@@ -174,6 +174,17 @@ async def generate_outfits(
                 "why_selected": list(set(combined_why)),
                 "outfit_embedding": outfit_embedding
             })
+
+        # Apply Phase 3A Feature 2: Real-time personalization boosts/penalties
+        try:
+            user_uuid = UUID(payload.user_id)
+            from app.services.personalization_engine import PersonalizationEngine
+            scored_candidates = await PersonalizationEngine.apply_recommendation_boosts(
+                scored_candidates, user_uuid, db
+            )
+        except (ValueError, TypeError):
+            # Gracefully fallback for string user IDs used in Phase 2
+            pass
             
         # 4. Filter and diversify (prevents visual redundancy)
         top_candidates = RecommendationRanker.diversify_and_rank(

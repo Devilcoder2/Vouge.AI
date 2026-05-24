@@ -19,6 +19,9 @@ from app.database.models import (
     User,
     RefreshToken,
     UserSession,
+    RecommendationFeedback,
+    UserBehaviorEvent,
+    UserStyleProfile,
 )
 
 async def init_models():

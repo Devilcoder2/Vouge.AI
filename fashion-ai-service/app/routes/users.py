@@ -12,9 +12,12 @@ from fastapi import APIRouter, Depends, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.dependencies import get_current_active_user
-from app.database.models import User
+from app.database.models import User, UserStyleProfile
 from app.database.session import get_db
 from app.schemas.auth import UpdateProfileRequest, UserResponse
+from app.schemas.personalization import StyleProfileResponse
+from app.services.personalization_engine import PersonalizationEngine
+from sqlalchemy.future import select
 
 logger = logging.getLogger("fashion-ai-service")
 router = APIRouter(prefix="/v1/users", tags=["User Profile"])
@@ -70,3 +73,26 @@ async def update_my_profile(
 
     logger.info(f"Profile updated for user: {current_user.email} (ID: {current_user.id})")
     return UserResponse.model_validate(current_user)
+
+
+# ── GET /v1/users/style-profile ───────────────────────────────────────────────
+
+@router.get("/style-profile", response_model=StyleProfileResponse, status_code=status.HTTP_200_OK)
+async def get_my_style_profile(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """
+    Retrieves the authenticated user's calculated style profile.
+    If no style profile has been generated yet, it compiles and returns an initial one.
+    """
+    result = await db.execute(
+        select(UserStyleProfile)
+        .where(UserStyleProfile.user_id == current_user.id)
+    )
+    profile = result.scalar_one_or_none()
+
+    if not profile:
+        profile = await PersonalizationEngine.update_style_profile(current_user.id, db)
+
+    return StyleProfileResponse.model_validate(profile)

@@ -11,6 +11,7 @@ from app.routes.processing import router as processing_router
 from app.routes.recommendation import router as recommendation_router
 from app.routes.auth import router as auth_router
 from app.routes.users import router as users_router
+from app.routes.personalization import router as personalization_router
 
 # Configure detailed runtime logging to standard output
 logging.basicConfig(
@@ -62,6 +63,7 @@ app.include_router(recommendation_router)
 # Phase 3A: Authentication & User Profile (versioned under /v1)
 app.include_router(auth_router)
 app.include_router(users_router)
+app.include_router(personalization_router)
 
 
 # ── Lifecycle Events ──────────────────────────────────────────────────────────

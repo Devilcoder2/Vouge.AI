@@ -1,7 +1,7 @@
 import uuid
 from datetime import date
 from sqlalchemy import Column, String, Integer, ARRAY, Date, DateTime, Numeric, Boolean, ForeignKey, Text, func
-from sqlalchemy.dialects.postgresql import UUID, JSON
+from sqlalchemy.dialects.postgresql import UUID, JSON, JSONB
 from sqlalchemy.orm import relationship
 from app.database.session import Base
 
@@ -152,6 +152,7 @@ class User(Base):
     # Relationships
     refresh_tokens = relationship("RefreshToken", back_populates="user", cascade="all, delete-orphan")
     sessions = relationship("UserSession", back_populates="user", cascade="all, delete-orphan")
+    style_profile = relationship("UserStyleProfile", back_populates="user", cascade="all, delete-orphan", uselist=False)
 
 
 class RefreshToken(Base):
@@ -188,3 +189,48 @@ class UserSession(Base):
 
     # Relationship
     user = relationship("User", back_populates="sessions")
+
+
+class RecommendationFeedback(Base):
+    """
+    SQLAlchemy model representing recommendation feedback (like, save, dismiss, regenerate).
+    """
+    __tablename__ = "recommendation_feedback"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    outfit_id = Column(String, nullable=True)  # SavedOutfit ID or temporary generated outfit ID
+    action_type = Column(String, nullable=False)  # like, save, dismiss, regenerate
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class UserBehaviorEvent(Base):
+    """
+    SQLAlchemy model representing tracked user behavior events (view, clicks, etc.).
+    """
+    __tablename__ = "user_behavior_events"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    event_type = Column(String, nullable=False)  # outfit_viewed, item_added, etc.
+    event_metadata = Column("metadata", JSONB, nullable=False, default=dict)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class UserStyleProfile(Base):
+    """
+    SQLAlchemy model representing the user's persistently learned style profile preferences.
+    """
+    __tablename__ = "user_style_profiles"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), unique=True, nullable=False, index=True)
+    preferred_colors = Column(ARRAY(String), nullable=False, default=list)
+    disliked_colors = Column(ARRAY(String), nullable=False, default=list)
+    preferred_styles = Column(ARRAY(String), nullable=False, default=list)
+    preferred_formality_range = Column(ARRAY(Integer), nullable=False, default=list)
+    favorite_categories = Column(ARRAY(String), nullable=False, default=list)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    # Relationship back to User
+    user = relationship("User", back_populates="style_profile")
