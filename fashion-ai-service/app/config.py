@@ -32,6 +32,10 @@ class Settings:
     ACCESS_TOKEN_EXPIRE_MINUTES: int = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "30"))
     REFRESH_TOKEN_EXPIRE_DAYS: int = int(os.getenv("REFRESH_TOKEN_EXPIRE_DAYS", "30"))
     
+    # Celery & Redis Background Processing
+    REDIS_URL: str = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+    USE_CELERY: bool = os.getenv("USE_CELERY", "true").lower() == "true"
+    
     # File storage configs
     UPLOAD_DIR: Path = BASE_DIR / os.getenv("UPLOAD_DIR", "uploads")
     PROCESSED_DIR: Path = BASE_DIR / os.getenv("PROCESSED_DIR", "processed")

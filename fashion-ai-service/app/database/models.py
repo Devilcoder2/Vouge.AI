@@ -153,6 +153,7 @@ class User(Base):
     refresh_tokens = relationship("RefreshToken", back_populates="user", cascade="all, delete-orphan")
     sessions = relationship("UserSession", back_populates="user", cascade="all, delete-orphan")
     style_profile = relationship("UserStyleProfile", back_populates="user", cascade="all, delete-orphan", uselist=False)
+    background_jobs = relationship("BackgroundJob", back_populates="user", cascade="all, delete-orphan")
 
 
 class RefreshToken(Base):
@@ -234,3 +235,23 @@ class UserStyleProfile(Base):
 
     # Relationship back to User
     user = relationship("User", back_populates="style_profile")
+
+
+class BackgroundJob(Base):
+    """
+    SQLAlchemy model representing asynchronous background job telemetry.
+    """
+    __tablename__ = "background_jobs"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    job_type = Column(String, nullable=False)  # clothing_processing_job, outfit_generation_job, gap_analysis_job
+    status = Column(String, nullable=False, default="queued")  # queued, processing, completed, failed, cancelled
+    progress = Column(Integer, nullable=False, default=0)  # 0 to 100
+    error_message = Column(String, nullable=True)
+    result_reference = Column(JSON, nullable=True)  # References to finished entities / JSON structures
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    completed_at = Column(DateTime(timezone=True), nullable=True)
+
+    # Relationship back to User
+    user = relationship("User", back_populates="background_jobs")

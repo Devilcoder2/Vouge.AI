@@ -22,6 +22,7 @@ from app.database.models import (
     RecommendationFeedback,
     UserBehaviorEvent,
     UserStyleProfile,
+    BackgroundJob,
 )
 
 async def init_models():
