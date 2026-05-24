@@ -42,6 +42,8 @@ class ClothingItem(Base):
     # Duplicate checking
     is_duplicate = Column(Boolean, nullable=False, default=False)
     duplicate_of_id = Column(UUID(as_uuid=True), nullable=True)
+    perceptual_hash = Column(String(64), nullable=True)
+
     
     # Path to saved local float32 numpy vector array (.npy file)
     embedding_path = Column(String, nullable=False)

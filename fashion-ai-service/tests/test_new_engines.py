@@ -249,8 +249,7 @@ def test_endpoints_profile_and_feedback(mock_outfit_items, monkeypatch):
     assert len(data_outfits["outfits"]) > 0
     
     first_outfit = data_outfits["outfits"][0]
-    # Check that personalized why_selected metadata and outfit_embedding are returned!
+    # Check that personalized why_selected metadata is returned!
     assert "why_selected" in first_outfit
     assert len(first_outfit["why_selected"]) > 0
-    assert "outfit_embedding" in first_outfit
-    assert len(first_outfit["outfit_embedding"]) == 512
+

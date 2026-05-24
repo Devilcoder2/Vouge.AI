@@ -72,7 +72,10 @@ class WardrobeNormalizer:
                 "secondary_colors": [c.lower() for c in getattr(item, "secondary_colors", []) if c],
                 "secondary_colors_hex": getattr(item, "secondary_colors_hex", []),
                 "pattern": getattr(item, "pattern", "solid"),
-                "embedding_path": getattr(item, "embedding_path", None)
+                "embedding_path": getattr(item, "embedding_path", None),
+                # Paths needed by the OutfitPreviewBuilder to locate garment PNG files
+                "processed_image_path": getattr(item, "processed_image_path", None),
+                "original_image_path": getattr(item, "original_image_path", None),
             }
             
             # 4. Group in the matching slot

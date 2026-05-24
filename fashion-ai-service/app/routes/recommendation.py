@@ -1,11 +1,14 @@
 import logging
+import uuid
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.responses import FileResponse, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from uuid import UUID, uuid4
 from typing import List
 from datetime import datetime, timezone
 
+from app.config import settings
 from app.database.session import get_db
 from app.database.models import ClothingItem, SavedOutfit, SavedOutfitItem, UserProfile, UserFeedback
 from app.schemas.recommendation import (
@@ -20,8 +23,10 @@ from app.schemas.recommendation import (
     VersatilityResponse,
     UserProfileSetupRequest,
     UserProfileResponse,
-    UserFeedbackRequest
+    UserFeedbackRequest,
+    OutfitPreviewRequest,
 )
+from app.services.outfit_preview_builder import OutfitPreviewBuilder
 from app.recommendation.generators.candidate_generator import CandidateGenerator
 from app.recommendation.scorers.outfit_scorer import OutfitScorer
 from app.recommendation.scorers.ranker import RecommendationRanker
@@ -201,6 +206,23 @@ async def generate_outfits(
                 for it in outfit["items"]
             ]
             
+            # Compose outfit preview image
+            preview_url: str | None = None
+            try:
+                preview_filename = f"{uuid.uuid4()}_preview.png"
+                preview_path = settings.PREVIEWS_DIR / preview_filename
+                OutfitPreviewBuilder.build_preview(
+                    outfit_items=outfit["items"],
+                    score=outfit["score"],
+                    occasion=payload.occasion,
+                    season=payload.season,
+                    reasoning=outfit.get("reasoning"),
+                    output_path=preview_path,
+                )
+                preview_url = f"/recommendations/preview-image/{preview_filename}"
+            except Exception as prev_err:
+                logger.warning(f"Preview generation skipped for outfit: {prev_err}")
+            
             response_outfits.append(
                 SingleOutfitResponse(
                     score=outfit["score"],
@@ -215,9 +237,10 @@ async def generate_outfits(
                         season_score=outfit["breakdown"]["season_score"]
                     ),
                     why_selected=outfit.get("why_selected", []),
-                    outfit_embedding=outfit.get("outfit_embedding")
+                    preview_url=preview_url,
                 )
             )
+
             
         return GenerateOutfitsResponse(outfits=response_outfits, diversity_eval=diversity_eval)
 
@@ -508,3 +531,68 @@ async def submit_user_feedback(
             detail=f"Failed to log feedback: {str(e)}"
         )
 
+
+@router.post("/outfit-preview", status_code=status.HTTP_200_OK)
+async def generate_outfit_preview(
+    payload: OutfitPreviewRequest,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Composes a vertically stacked outfit preview PNG image from a list of
+    clothing item IDs. Returns the raw image as a PNG response.
+    """
+    try:
+        # Fetch all requested garments from DB
+        outfit_items = []
+        for item_id in payload.clothing_item_ids:
+            res = await db.execute(select(ClothingItem).where(ClothingItem.id == item_id))
+            item = res.scalar_one_or_none()
+            if not item:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"Clothing item '{item_id}' not found in wardrobe."
+                )
+            outfit_items.append({
+                "id": item.id,
+                "category": item.category,
+                "processed_image_path": item.processed_image_path,
+            })
+
+        # Build the preview image bytes
+        preview_bytes = OutfitPreviewBuilder.build_preview(
+            outfit_items=outfit_items,
+            score=payload.score,
+            occasion=payload.occasion,
+            season=payload.season,
+            reasoning=payload.reasoning,
+        )
+
+        return Response(
+            content=preview_bytes,
+            media_type="image/png",
+            headers={"Content-Disposition": "inline; filename=outfit_preview.png"}
+        )
+
+    except HTTPException as he:
+        raise he
+    except Exception as e:
+        logger.error(f"Outfit preview generation failed: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Preview generation failed: {str(e)}"
+        )
+
+
+@router.get("/preview-image/{filename}", status_code=status.HTTP_200_OK)
+async def serve_preview_image(filename: str):
+    """
+    Serves a previously generated outfit preview PNG image by filename.
+    Used by the frontend to load preview_url returned by /generate-outfits.
+    """
+    file_path = settings.PREVIEWS_DIR / filename
+    if not file_path.exists():
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Preview image '{filename}' not found."
+        )
+    return FileResponse(str(file_path), media_type="image/png")

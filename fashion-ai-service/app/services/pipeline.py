@@ -15,6 +15,8 @@ from app.ai.classifier import FashionClassifier
 from app.ai.color_extractor import ColorExtractor
 from app.ai.embedding_service import FashionEmbeddingService
 from app.database.models import ClothingItem
+from app.services.duplicate_detector import DuplicateDetector
+
 
 logger = logging.getLogger("fashion-ai-service")
 
@@ -97,41 +99,19 @@ class FashionIntelligencePipeline:
             embedding_latency = (time.perf_counter() - embedding_start) * 1000
             logger.info(f"CLIP embedding generated and saved (time: {embedding_latency:.2f}ms)")
 
-            # --- Duplicate Detection (Cosine Similarity) ---
+            # --- Duplicate Detection (Double-Moat: dHash + Cosine) ---
             duplicate_start = time.perf_counter()
-            is_duplicate = False
-            duplicate_of_id = None
+            perceptual_hash = DuplicateDetector.calculate_dhash(processed_img)
             
-            # Retrieve user's existing wardrobe items
+            # Retrieve existing wardrobe items
             result = await db.execute(select(ClothingItem))
             existing_items = result.scalars().all()
             
-            if existing_items and len(existing_items) > 0:
-                # L2 normalize the new embedding vector
-                new_vector = embedding / np.linalg.norm(embedding)
-                
-                for item in existing_items:
-                    if item.embedding_path and Path(item.embedding_path).exists():
-                        try:
-                            # Load existing embedding from disk
-                            ext_vector = np.load(item.embedding_path)
-                            # L2 normalize
-                            ext_vector_norm = ext_vector / np.linalg.norm(ext_vector)
-                            
-                            # Calculate Cosine Similarity
-                            similarity = float(np.dot(new_vector, ext_vector_norm))
-                            
-                            # If similarity is above 0.95 threshold, flag it
-                            if similarity > 0.95:
-                                is_duplicate = True
-                                duplicate_of_id = item.id
-                                logger.warning(
-                                    f"Likely duplicate detected! Matches item {item.id} "
-                                    f"with Cosine Similarity: {similarity:.4f}"
-                                )
-                                break
-                        except Exception as sim_err:
-                            logger.error(f"Error computing similarity against item {item.id}: {str(sim_err)}")
+            is_duplicate, duplicate_of_id = DuplicateDetector.check_duplicates(
+                processed_img,
+                embedding,
+                existing_items
+            )
             
             duplicate_latency = (time.perf_counter() - duplicate_start) * 1000
 
@@ -160,8 +140,10 @@ class FashionIntelligencePipeline:
                 detected_items_count=extracted_metadata.detected_items_count,
                 is_duplicate=is_duplicate,
                 duplicate_of_id=duplicate_of_id,
+                perceptual_hash=perceptual_hash,
                 embedding_path=str(embedding_filepath)
             )
+
 
             db.add(db_item)
             await db.commit()

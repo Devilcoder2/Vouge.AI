@@ -1,7 +1,8 @@
 import logging
-from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, status
+from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
+from typing import List, Optional
 from uuid import UUID
 
 from app.database.session import get_db
@@ -89,6 +90,70 @@ async def get_clothing_item(item_id: UUID, db: AsyncSession = Depends(get_db)):
         )
         
     return ProcessedClothingResponse.model_validate(item)
+
+
+@router.get("/items", response_model=List[ProcessedClothingResponse])
+async def list_wardrobe_items(
+    db: AsyncSession = Depends(get_db),
+    category: Optional[str] = Query(
+        None,
+        description="Filter by category. One of: Tops, Bottoms, Outerwear, Shoes, Accessories"
+    ),
+    include_duplicates: bool = Query(
+        False,
+        description="If false (default), excludes items flagged as duplicates from the results."
+    )
+):
+    """
+    Returns all clothing items in the wardrobe.
+    Supports optional filtering by category and duplicate exclusion.
+    Results are ordered newest-first by upload date.
+    """
+    stmt = select(ClothingItem).order_by(ClothingItem.created_at.desc())
+    result = await db.execute(stmt)
+    items = result.scalars().all()
+
+    # Filter by category if specified
+    if category:
+        items = [it for it in items if it.category.lower() == category.lower()]
+
+    # Exclude duplicates unless explicitly requested
+    if not include_duplicates:
+        items = [it for it in items if not it.is_duplicate]
+
+    return [ProcessedClothingResponse.model_validate(it) for it in items]
+
+
+@router.delete("/items/{item_id}", status_code=status.HTTP_200_OK)
+async def delete_clothing_item(
+    item_id: UUID,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Permanently deletes a clothing item from the wardrobe by UUID.
+    Also removes its associated processed image and embedding files from disk.
+    """
+    result = await db.execute(select(ClothingItem).where(ClothingItem.id == item_id))
+    item = result.scalar_one_or_none()
+
+    if not item:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Clothing item with ID '{item_id}' not found."
+        )
+
+    # Clean up associated files from disk
+    from pathlib import Path
+    for path_attr in ("processed_image_path", "original_image_path", "embedding_path"):
+        file_path = getattr(item, path_attr, None)
+        if file_path:
+            FileHandler.delete_file(Path(file_path))
+
+    await db.delete(item)
+    await db.commit()
+
+    logger.info(f"Clothing item {item_id} deleted from wardrobe.")
+    return {"message": f"Item '{item_id}' successfully deleted from your wardrobe."}
 
 @router.patch("/items/{item_id}", response_model=ProcessedClothingResponse)
 async def patch_clothing_item(

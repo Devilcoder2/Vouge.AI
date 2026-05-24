@@ -33,7 +33,8 @@ class SingleOutfitResponse(BaseModel):
     template_name: str
     breakdown: OutfitScoreBreakdown
     why_selected: List[str] = Field(default_factory=list)
-    outfit_embedding: Optional[List[float]] = None
+    preview_url: Optional[str] = Field(None, description="URL to the composed outfit preview image")
+
 
 class GenerateOutfitsResponse(BaseModel):
     outfits: List[SingleOutfitResponse]
@@ -107,3 +108,19 @@ class UserFeedbackRequest(BaseModel):
     outfit_item_ids: List[UUID]
     feedback_type: str  # like, save, dismiss
 
+
+class OutfitPreviewItemRequest(BaseModel):
+    """Represents a single garment item with its category and image path."""
+    id: UUID
+    category: str
+    processed_image_path: str
+
+class OutfitPreviewRequest(BaseModel):
+    """Request body for the POST /recommendations/outfit-preview endpoint."""
+    clothing_item_ids: List[UUID] = Field(
+        ..., description="Ordered list of garment UUIDs to compose into the preview"
+    )
+    score: Optional[int] = Field(None, description="Outfit compatibility score for badge display")
+    occasion: Optional[str] = Field(None, description="Occasion label for footer")
+    season: Optional[str] = Field(None, description="Season label for footer")
+    reasoning: Optional[str] = Field(None, description="Stylist reasoning snippet for footer")

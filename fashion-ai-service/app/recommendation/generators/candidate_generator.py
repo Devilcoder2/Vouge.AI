@@ -9,6 +9,7 @@ from app.recommendation.utils.wardrobe_normalizer import WardrobeNormalizer
 from app.recommendation.generators.outfit_templates import get_templates_for_occasion, OutfitTemplate
 from app.recommendation.engines.color_engine import ColorEngine
 from app.recommendation.engines.formality_engine import FormalityEngine
+from app.recommendation.rules.recommendation_guardrails import RecommendationGuardrails
 
 logger = logging.getLogger("fashion-ai-service")
 
@@ -153,6 +154,12 @@ class CandidateGenerator:
                             
                     if selected_outerwear:
                         outfit_items.append(selected_outerwear)
+                        
+                    # Apply Hard Validation Firewall Guardrails
+                    is_valid, reason = RecommendationGuardrails.is_valid_outfit(outfit_items)
+                    if not is_valid:
+                        logger.info(f"Candidate outfit rejected by Guardrails: {reason}")
+                        continue
                         
                     # Calculate a lightweight heuristic score for preliminary pruning
                     prelim_score = (color_res["score"] + formality_res["score"] + shoe_color_res["score"]) / 3

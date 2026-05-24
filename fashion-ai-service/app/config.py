@@ -30,6 +30,7 @@ class Settings:
     UPLOAD_DIR: Path = BASE_DIR / os.getenv("UPLOAD_DIR", "uploads")
     PROCESSED_DIR: Path = BASE_DIR / os.getenv("PROCESSED_DIR", "processed")
     EMBEDDING_DIR: Path = BASE_DIR / os.getenv("EMBEDDING_DIR", "embeddings")
+    PREVIEWS_DIR: Path = BASE_DIR / os.getenv("PREVIEWS_DIR", "previews")
     
     MAX_CONTENT_LENGTH: int = int(os.getenv("MAX_CONTENT_LENGTH", "10485760")) # 10MB default
     ALLOWED_EXTENSIONS: set = set(
@@ -42,3 +43,4 @@ settings = Settings()
 settings.UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 settings.PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
 settings.EMBEDDING_DIR.mkdir(parents=True, exist_ok=True)
+settings.PREVIEWS_DIR.mkdir(parents=True, exist_ok=True)

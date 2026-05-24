@@ -71,7 +71,9 @@ class ProcessedClothingResponse(BaseModel):
     embedding_generated: bool
     is_duplicate: bool
     duplicate_of_id: Optional[UUID] = None
+    perceptual_hash: Optional[str] = None
     prompt_version: str
+
     detected_items_count: int
     created_at: datetime
 
@@ -115,10 +117,12 @@ class ProcessedClothingResponse(BaseModel):
                 "embedding_generated": True,
                 "is_duplicate": getattr(data, "is_duplicate", False),
                 "duplicate_of_id": getattr(data, "duplicate_of_id", None),
+                "perceptual_hash": getattr(data, "perceptual_hash", None),
                 "prompt_version": getattr(data, "prompt_version", "v1.0.0"),
                 "detected_items_count": getattr(data, "detected_items_count", 1),
                 "created_at": data.created_at,
             }
+
         return data
 
     class Config:
