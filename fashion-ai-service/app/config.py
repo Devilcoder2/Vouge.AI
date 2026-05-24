@@ -47,6 +47,15 @@ class Settings:
         os.getenv("ALLOWED_EXTENSIONS", "jpg,jpeg,png").lower().split(",")
     )
 
+    # AWS / S3-Compatible Cloud Storage
+    USE_S3: bool = os.getenv("USE_S3", "false").lower() == "true"
+    AWS_ACCESS_KEY_ID: str = os.getenv("AWS_ACCESS_KEY_ID", "")
+    AWS_SECRET_ACCESS_KEY: str = os.getenv("AWS_SECRET_ACCESS_KEY", "")
+    AWS_S3_BUCKET_NAME: str = os.getenv("AWS_S3_BUCKET_NAME", "vouge-assets")
+    AWS_S3_REGION_NAME: str = os.getenv("AWS_S3_REGION_NAME", "us-east-1")
+    AWS_S3_ENDPOINT_URL: str = os.getenv("AWS_S3_ENDPOINT_URL", "")
+    CDN_BASE_URL: str = os.getenv("CDN_BASE_URL", "")
+
 settings = Settings()
 
 # Ensure standard operational folders exist locally
@@ -54,3 +63,9 @@ settings.UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 settings.PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
 settings.EMBEDDING_DIR.mkdir(parents=True, exist_ok=True)
 settings.PREVIEWS_DIR.mkdir(parents=True, exist_ok=True)
+
+# Ensure local fallback directory layout folders exist
+(settings.UPLOAD_DIR / "raw").mkdir(parents=True, exist_ok=True)
+(settings.UPLOAD_DIR / "processed").mkdir(parents=True, exist_ok=True)
+(settings.UPLOAD_DIR / "thumbnails").mkdir(parents=True, exist_ok=True)
+(settings.UPLOAD_DIR / "previews").mkdir(parents=True, exist_ok=True)

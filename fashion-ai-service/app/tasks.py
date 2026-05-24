@@ -24,6 +24,9 @@ from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
 
 # Import AI Pipeline components
+import io
+from app.services.storage_service import storage_service
+from app.services.image_optimizer import ImageOptimizer
 from app.utils.file_handler import FileHandler
 from app.ai.background_removal import BackgroundRemover
 from app.ai.preprocessing import ImagePreprocessor
@@ -124,9 +127,21 @@ async def run_async_clothing_processing(job_uuid: UUID, raw_image_path: str, use
             await update_job_status(db, job_uuid, status="processing", progress=10)
             logger.info(f"[Job {job_uuid}] Running background removal...")
 
-            # 2. Background Removal
+            # 2. Background Removal & Storage Upload
             with open(raw_filepath, "rb") as f:
                 raw_bytes = f.read()
+            
+            # Validate raw image bytes
+            ImageOptimizer.validate_and_load(raw_bytes)
+
+            original_filename = raw_filepath.name
+            original_image_url = storage_service.upload_file(
+                file_data=raw_bytes,
+                folder="raw",
+                filename=original_filename,
+                content_type="image/png" if original_filename.lower().endswith(".png") else "image/jpeg"
+            )
+
             transparent_img = BackgroundRemover.remove_background(raw_bytes)
 
             if await is_job_cancelled(db, job_uuid):
@@ -141,6 +156,37 @@ async def run_async_clothing_processing(job_uuid: UUID, raw_image_path: str, use
             processed_filename = f"{raw_filepath.stem}_processed.png"
             processed_filepath = settings.PROCESSED_DIR / processed_filename
             processed_img.save(processed_filepath, format="PNG")
+
+            # Compress and Optimize variants
+            output_transparent = io.BytesIO()
+            processed_img.save(output_transparent, format="PNG")
+            transparent_bytes = output_transparent.getvalue()
+
+            variants = ImageOptimizer.generate_variants(transparent_bytes)
+
+            # Upload variants
+            processed_image_url = storage_service.upload_file(
+                file_data=variants["mobile"],
+                folder="processed",
+                filename=processed_filename,
+                content_type="image/png"
+            )
+
+            thumb_filename = f"{raw_filepath.stem}_thumb.png"
+            thumbnail_url = storage_service.upload_file(
+                file_data=variants["thumbnail"],
+                folder="thumbnails",
+                filename=thumb_filename,
+                content_type="image/png"
+            )
+
+            preview_filename_garment = f"{raw_filepath.stem}_preview.png"
+            preview_url = storage_service.upload_file(
+                file_data=variants["web"],
+                folder="previews",
+                filename=preview_filename_garment,
+                content_type="image/png"
+            )
 
             if await is_job_cancelled(db, job_uuid):
                 await update_job_status(db, job_uuid, status="cancelled")
@@ -192,6 +238,10 @@ async def run_async_clothing_processing(job_uuid: UUID, raw_image_path: str, use
             db_item = ClothingItem(
                 original_image_path=str(raw_filepath),
                 processed_image_path=str(processed_filepath),
+                original_image_url=original_image_url,
+                processed_image_url=processed_image_url,
+                thumbnail_url=thumbnail_url,
+                preview_url=preview_url,
                 category=extracted_metadata.category.value,
                 confidence_category=extracted_metadata.category.confidence,
                 subcategory=extracted_metadata.subcategory.value,

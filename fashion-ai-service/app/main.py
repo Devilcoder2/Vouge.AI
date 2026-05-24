@@ -13,6 +13,7 @@ from app.routes.auth import router as auth_router
 from app.routes.users import router as users_router
 from app.routes.personalization import router as personalization_router
 from app.routes.jobs import router as jobs_router
+from app.routes.media import router as media_router
 
 # Configure detailed runtime logging to standard output
 logging.basicConfig(
@@ -66,6 +67,7 @@ app.include_router(auth_router)
 app.include_router(users_router)
 app.include_router(personalization_router)
 app.include_router(jobs_router)
+app.include_router(media_router)
 
 
 # ── Lifecycle Events ──────────────────────────────────────────────────────────

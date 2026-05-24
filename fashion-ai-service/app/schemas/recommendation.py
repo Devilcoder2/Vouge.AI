@@ -48,6 +48,7 @@ class SaveOutfitRequest(BaseModel):
     score: int = Field(..., description="Compatibility score")
     reasoning: str = Field(..., description="Stylist reasoning")
     clothing_item_ids: List[UUID] = Field(..., description="List of garment IDs included in the outfit")
+    preview_url: Optional[str] = Field(None, description="URL of composed outfit preview image")
 
 class SavedOutfitResponse(BaseModel):
     id: UUID
@@ -57,6 +58,7 @@ class SavedOutfitResponse(BaseModel):
     season: str
     score: int
     reasoning: Optional[str] = None
+    preview_url: Optional[str] = None
     created_at: datetime
     items: List[RecommendationItemResponse]
 

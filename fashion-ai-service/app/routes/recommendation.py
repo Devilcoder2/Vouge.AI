@@ -294,7 +294,8 @@ async def save_outfit(
             occasion=payload.occasion,
             season=payload.season,
             score=payload.score,
-            reasoning=payload.reasoning
+            reasoning=payload.reasoning,
+            preview_url=payload.preview_url
         )
         
         db.add(db_outfit)
@@ -334,6 +335,7 @@ async def save_outfit(
             season=db_outfit.season,
             score=db_outfit.score,
             reasoning=db_outfit.reasoning,
+            preview_url=db_outfit.preview_url,
             created_at=db_outfit.created_at or datetime.now(timezone.utc),
             items=response_items
         )

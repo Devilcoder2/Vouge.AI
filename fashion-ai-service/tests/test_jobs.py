@@ -58,6 +58,10 @@ def clean_mocks():
     
     from app.recommendation.engines.gap_analysis import GapAnalysisEngine
     orig_analyze_gaps = GapAnalysisEngine.analyze_gaps
+
+    from app.services.image_optimizer import ImageOptimizer
+    orig_validate_load = ImageOptimizer.validate_and_load
+    orig_gen_variants = ImageOptimizer.generate_variants
     
     yield
     
@@ -74,6 +78,8 @@ def clean_mocks():
     DuplicateDetector.check_duplicates = orig_check_dup
     OutfitExplainer.explain_recommendations = orig_explain
     GapAnalysisEngine.analyze_gaps = orig_analyze_gaps
+    ImageOptimizer.validate_and_load = orig_validate_load
+    ImageOptimizer.generate_variants = orig_gen_variants
 
 # ── Shared In-Memory Stores for Test State ─────────────────────────────────────
 _USERS: dict = {}
@@ -288,6 +294,9 @@ def test_process_clothing_job_lifecycle():
     FashionEmbeddingService.save_embedding_to_disk = lambda emb, stem: "embeddings/fake.npy"
     DuplicateDetector.calculate_dhash = lambda img: "fake_dhash"
     DuplicateDetector.check_duplicates = lambda img, emb, existing: (False, None)
+    from app.services.image_optimizer import ImageOptimizer
+    ImageOptimizer.validate_and_load = lambda b: MockPILImage()
+    ImageOptimizer.generate_variants = lambda b: {"thumbnail": b"thumb", "mobile": b"mobile", "web": b"web"}
 
     # File Upload Mocking
     file_bytes = BytesIO(b"fake image content")

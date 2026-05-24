@@ -16,6 +16,12 @@ class ClothingItem(Base):
     original_image_path = Column(String, nullable=False)
     processed_image_path = Column(String, nullable=False)
     
+    # Cloud Storage CDN-ready URLs
+    original_image_url = Column(String, nullable=True)
+    processed_image_url = Column(String, nullable=True)
+    thumbnail_url = Column(String, nullable=True)
+    preview_url = Column(String, nullable=True)
+    
     # Metadata extracted by Gemini & OpenCV
     category = Column(String, nullable=False)
     subcategory = Column(String, nullable=False)
@@ -64,6 +70,7 @@ class SavedOutfit(Base):
     season = Column(String, nullable=False)
     score = Column(Integer, nullable=False)
     reasoning = Column(String, nullable=True)
+    preview_url = Column(String, nullable=True)
     created_at = Column(DateTime(timezone=True), default=func.now())
 
     # Relationship to intermediate items

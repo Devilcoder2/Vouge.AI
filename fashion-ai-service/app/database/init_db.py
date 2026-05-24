@@ -40,6 +40,21 @@ async def init_models():
             await conn.execute(text(
                 "ALTER TABLE clothing_items ADD COLUMN IF NOT EXISTS perceptual_hash VARCHAR(64);"
             ))
+            await conn.execute(text(
+                "ALTER TABLE clothing_items ADD COLUMN IF NOT EXISTS original_image_url VARCHAR;"
+            ))
+            await conn.execute(text(
+                "ALTER TABLE clothing_items ADD COLUMN IF NOT EXISTS processed_image_url VARCHAR;"
+            ))
+            await conn.execute(text(
+                "ALTER TABLE clothing_items ADD COLUMN IF NOT EXISTS thumbnail_url VARCHAR;"
+            ))
+            await conn.execute(text(
+                "ALTER TABLE clothing_items ADD COLUMN IF NOT EXISTS preview_url VARCHAR;"
+            ))
+            await conn.execute(text(
+                "ALTER TABLE saved_outfits ADD COLUMN IF NOT EXISTS preview_url VARCHAR;"
+            ))
 
         print("✓ PostgreSQL tables successfully initialized.")
         print("  Tables managed:")
