@@ -9,6 +9,7 @@ import AIChat from "./pages/AIChat";
 import Wardrobe from "./pages/Wardrobe";
 import Planner from "./pages/Planner";
 import GenericScreen from "./pages/GenericScreen";
+import InventoryCategory from "./pages/InventoryCategory";
 
 export const App = () => {
   return (
@@ -118,20 +119,19 @@ export const App = () => {
             element={<GenericScreen title="Aesthetic Definition" />}
           />
           <Route
-            path="/app/inventory/tops"
-            element={<GenericScreen title="Tops Inventory" />}
-          />
-          <Route
-            path="/app/inventory/bottoms"
-            element={<GenericScreen title="Bottoms Inventory" />}
-          />
-          <Route
-            path="/app/inventory/outerwear"
-            element={<GenericScreen title="Outerwear Inventory" />}
-          />
-          <Route
-            path="/app/inventory/footwear"
-            element={<GenericScreen title="Footwear Inventory" />}
+            path="/app/inventory/:categoryId"
+            element={
+              <>
+                <Helmet>
+                  <title>My Inventory | VOGUE.AI</title>
+                  <meta
+                    name="description"
+                    content="Browse your digitized wardrobe collection archive."
+                  />
+                </Helmet>
+                <InventoryCategory />
+              </>
+            }
           />
           <Route
             path="/app/item/edit"
