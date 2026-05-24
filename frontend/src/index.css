@@ -91,21 +91,27 @@
 
 /* Custom UI Components & Effects */
 .glass-panel {
-  background: rgba(255, 255, 255, 0.02);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .ai-glow {
-  box-shadow: 0 0 30px rgba(173, 198, 255, 0.1);
+  box-shadow: 0 0 40px rgba(173, 198, 255, 0.05);
 }
 
-.hide-scrollbar::-webkit-scrollbar {
+.hero-gradient {
+  background: linear-gradient(to top, #121317 0%, rgba(18, 19, 23, 0.4) 50%, transparent 100%);
+}
+
+.hide-scrollbar::-webkit-scrollbar,
+.no-scrollbar::-webkit-scrollbar {
   display: none;
 }
 
-.hide-scrollbar {
+.hide-scrollbar,
+.no-scrollbar {
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
