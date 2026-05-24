@@ -34,6 +34,16 @@ export const Breadcrumbs = () => {
           segments[1].charAt(0).toUpperCase() + segments[1].slice(1);
         crumbs.push({ label: categoryLabel, url: null });
       }
+    } else if (segments[0] === "item") {
+      crumbs.push({ label: "Wardrobe", url: "/app/wardrobe" });
+      if (segments[1]) {
+        const categoryLabel =
+          segments[1].charAt(0).toUpperCase() + segments[1].slice(1);
+        crumbs.push({ label: categoryLabel, url: `/app/inventory/${segments[1]}` });
+      }
+      if (segments[2]) {
+        crumbs.push({ label: "Item Details", url: null });
+      }
     } else if (segments[0] === "outfit") {
       crumbs.push({ label: "Planner", url: "/app/planner" });
       crumbs.push({ label: "Outfit Details", url: null });

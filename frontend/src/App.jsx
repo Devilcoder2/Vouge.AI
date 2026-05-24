@@ -10,6 +10,7 @@ import Wardrobe from "./pages/Wardrobe";
 import Planner from "./pages/Planner";
 import GenericScreen from "./pages/GenericScreen";
 import InventoryCategory from "./pages/InventoryCategory";
+import ItemDetails from "./pages/ItemDetails";
 
 export const App = () => {
   return (
@@ -134,8 +135,19 @@ export const App = () => {
             }
           />
           <Route
-            path="/app/item/edit"
-            element={<GenericScreen title="Edit Item" />}
+            path="/app/item/:categoryId/:itemId"
+            element={
+              <>
+                <Helmet>
+                  <title>Item Details | VOGUE.AI</title>
+                  <meta
+                    name="description"
+                    content="View and edit the metadata details of your digital wardrobe item."
+                  />
+                </Helmet>
+                <ItemDetails />
+              </>
+            }
           />
           <Route
             path="/app/analysis"

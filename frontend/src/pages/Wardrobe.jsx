@@ -285,7 +285,7 @@ export const Wardrobe = () => {
             <div className="space-y-6 flex-grow overflow-y-auto no-scrollbar max-h-[350px]">
               {/* Blouse */}
               <div 
-                onClick={() => navigate("/app/item/edit")}
+                onClick={() => navigate("/app/item/tops/blouse")}
                 className="flex items-center gap-4 group cursor-pointer"
               >
                 <div className="w-16 h-20 rounded-lg overflow-hidden flex-shrink-0 glass-panel shadow-md">
@@ -307,7 +307,7 @@ export const Wardrobe = () => {
 
               {/* Sneakers */}
               <div 
-                onClick={() => navigate("/app/item/edit")}
+                onClick={() => navigate("/app/item/footwear/sneakers")}
                 className="flex items-center gap-4 group cursor-pointer"
               >
                 <div className="w-16 h-20 rounded-lg overflow-hidden flex-shrink-0 glass-panel shadow-md">
