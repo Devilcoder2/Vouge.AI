@@ -44,6 +44,9 @@ export const Breadcrumbs = () => {
       if (segments[2]) {
         crumbs.push({ label: "Item Details", url: null });
       }
+    } else if (segments[0] === "category" && segments[1] === "new") {
+      crumbs.push({ label: "Wardrobe", url: "/app/wardrobe" });
+      crumbs.push({ label: "New Category", url: null });
     } else if (segments[0] === "outfit") {
       crumbs.push({ label: "Planner", url: "/app/planner" });
       crumbs.push({ label: "Outfit Details", url: null });

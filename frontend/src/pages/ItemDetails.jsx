@@ -49,7 +49,7 @@ export const ItemDetails = ({
   const [verified, setVerified] = useState(false);
   const [long, setLong] = useState(false);
   const [hasAIService, setHasAIService] = useState(false);
-  const [selectedCategory, setSelectedCategory] = useState("");
+  const [selectedCategories, setSelectedCategories] = useState([]);
 
   // UI state for browser EyeDropper API availability
   const [isEyeDropperSupported, setIsEyeDropperSupported] = useState(false);
@@ -83,7 +83,8 @@ export const ItemDetails = ({
         verified: !!item.verified,
         long: !!item.long,
         hasAIService: !!item.hasAIService,
-        categoryId: activeCategoryId
+        categoryId: activeCategoryId,
+        categories: item.categories || [activeCategoryId]
       };
       
       setOriginalData(data);
@@ -103,7 +104,7 @@ export const ItemDetails = ({
     setVerified(data.verified);
     setLong(data.long);
     setHasAIService(data.hasAIService);
-    setSelectedCategory(data.categoryId);
+    setSelectedCategories(data.categories || [data.categoryId]);
   };
 
   // Reset fields to last saved state
@@ -181,7 +182,7 @@ export const ItemDetails = ({
       verified,
       long,
       hasAIService,
-      categoryId: selectedCategory
+      categories: selectedCategories
     };
 
     if (isControlled && onSave) {
@@ -201,10 +202,10 @@ export const ItemDetails = ({
         setTimeout(() => toast.remove(), 400);
       }, 2000);
 
-      // If category has changed, redirect
-      if (selectedCategory !== activeCategoryId) {
+      // If active category has changed (no longer in categories list), redirect
+      if (!selectedCategories.includes(activeCategoryId) && selectedCategories.length > 0) {
         setTimeout(() => {
-          navigate(`/app/inventory/${selectedCategory}`);
+          navigate(`/app/inventory/${selectedCategories[0]}`);
         }, 800);
       }
     }
@@ -227,7 +228,8 @@ export const ItemDetails = ({
 
   // Custom AI suggestions computed dynamically based on category
   const getAISuggestion = () => {
-    switch (selectedCategory) {
+    const primaryCat = selectedCategories[0] || "";
+    switch (primaryCat) {
       case "tops":
         return `AI suggests this item pairs exceptionally well with your Tailored Wool Trousers. Updating the occasion to '${occasion.charAt(0).toUpperCase() + occasion.slice(1)}' will re-index it in your capsule wardrobe.`;
       case "bottoms":
@@ -335,20 +337,28 @@ export const ItemDetails = ({
               )}
             </div>
 
-            {/* Box 2: Category */}
+            {/* Box 2: Category Classification (Multi-select enabled!) */}
             <div className="flex flex-col gap-2 sm:col-span-1">
               <label className="font-label-sm text-[9px] text-on-surface-variant uppercase tracking-[0.2em] mb-1.5 font-semibold select-none">
-                Category
+                Category Classifications
               </label>
               {isEditMode ? (
                 <div className="flex flex-wrap gap-2 pt-1">
                   {categoriesList.map((cat) => {
-                    const isActive = selectedCategory === cat.id;
+                    const isActive = selectedCategories.includes(cat.id);
                     return (
                       <button
                         key={cat.id}
                         type="button"
-                        onClick={() => setSelectedCategory(cat.id)}
+                        onClick={() => {
+                          if (isActive) {
+                            if (selectedCategories.length > 1) {
+                              setSelectedCategories(selectedCategories.filter((id) => id !== cat.id));
+                            }
+                          } else {
+                            setSelectedCategories([...selectedCategories, cat.id]);
+                          }
+                        }}
                         className={`px-3 py-1.5 rounded-full border text-[10px] uppercase tracking-wider font-semibold transition-all duration-300 cursor-pointer ${
                           isActive
                             ? "border-primary bg-white/5 text-on-surface"
@@ -361,10 +371,18 @@ export const ItemDetails = ({
                   })}
                 </div>
               ) : (
-                <div className="flex select-none py-2.5">
-                  <span className="px-4 py-1.5 rounded-full border border-primary/20 bg-white/5 text-[11px] text-on-surface tracking-wider uppercase font-semibold">
-                    {categoriesList.find((cat) => cat.id === selectedCategory)?.label || selectedCategory}
-                  </span>
+                <div className="flex flex-wrap gap-2 select-none py-2.5">
+                  {selectedCategories.map((catId) => {
+                    const label = categoriesList.find((c) => c.id === catId)?.label || catId;
+                    return (
+                      <span
+                        key={catId}
+                        className="px-4 py-1.5 rounded-full border border-primary/20 bg-white/5 text-[11px] text-on-surface tracking-wider uppercase font-semibold"
+                      >
+                        {label}
+                      </span>
+                    );
+                  })}
                 </div>
               )}
             </div>

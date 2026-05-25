@@ -11,6 +11,7 @@ import Planner from "./pages/Planner";
 import GenericScreen from "./pages/GenericScreen";
 import InventoryCategory from "./pages/InventoryCategory";
 import ItemDetails from "./pages/ItemDetails";
+import AddCategory from "./pages/AddCategory";
 
 export const App = () => {
   return (
@@ -131,6 +132,21 @@ export const App = () => {
                   />
                 </Helmet>
                 <InventoryCategory />
+              </>
+            }
+          />
+          <Route
+            path="/app/category/new"
+            element={
+              <>
+                <Helmet>
+                  <title>New Category | VOGUE.AI</title>
+                  <meta
+                    name="description"
+                    content="Create a custom digital wardrobe category to organize your curated capsule styles."
+                  />
+                </Helmet>
+                <AddCategory />
               </>
             }
           />

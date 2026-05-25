@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import Layout from "../components/layout/Layout";
+import { getCategories } from "../utils/wardrobeStore";
 
 export const Wardrobe = () => {
   const [searchQuery, setSearchQuery] = useState("");
@@ -29,53 +30,11 @@ export const Wardrobe = () => {
     };
   }, []);
 
-  const categories = [
-    {
-      id: "tops",
-      name: "Tops",
-      subtitle: "Essentials",
-      count: 42,
-      status: "Sync Complete",
-      image: "/assets/tops_category.png",
-      path: "/app/inventory/tops",
-    },
-    {
-      id: "bottoms",
-      name: "Bottoms",
-      subtitle: "Structured",
-      count: 28,
-      status: "12 Available",
-      image: "/assets/bottoms_category.png",
-      path: "/app/inventory/bottoms",
-    },
-    {
-      id: "outerwear",
-      name: "Outerwear",
-      subtitle: "Layering",
-      count: 15,
-      status: "Season Ready",
-      image: "/assets/outerwear_category.png",
-      path: "/app/inventory/outerwear",
-    },
-    {
-      id: "footwear",
-      name: "Shoes",
-      subtitle: "Footwear",
-      count: 24,
-      status: "Verified",
-      image: "/assets/shoes_category.png",
-      path: "/app/inventory/footwear",
-    },
-    {
-      id: "accessories",
-      name: "Accessories",
-      subtitle: "Details",
-      count: 56,
-      status: "Scanning...",
-      image: "/assets/curation_collage_feature.png",
-      path: "/app/inventory/accessories",
-    },
-  ];
+  const [categories, setCategories] = useState([]);
+
+  useEffect(() => {
+    setCategories(getCategories());
+  }, []);
 
   const filteredCategories = categories.filter(
     (cat) =>
@@ -204,7 +163,7 @@ export const Wardrobe = () => {
 
                 {/* Add New Category Card */}
                 <button 
-                  onClick={() => navigate("/app/camera")}
+                  onClick={() => navigate("/app/category/new")}
                   className="group relative aspect-[4/5] rounded-2xl overflow-hidden glass-panel flex flex-col items-center justify-center border-dashed border border-white/10 hover:border-white/20 hover:bg-white/[0.02] transition-all duration-500 cursor-pointer shadow-xl"
                 >
                   <div className="w-14 h-14 rounded-full glass-panel bg-white/5 flex items-center justify-center mb-4 group-hover:bg-tertiary group-hover:text-on-tertiary transition-all duration-300 shadow-inner">
