@@ -12,6 +12,7 @@ import GenericScreen from "./pages/GenericScreen";
 import InventoryCategory from "./pages/InventoryCategory";
 import ItemDetails from "./pages/ItemDetails";
 import AddCategory from "./pages/AddCategory";
+import Profile from "./pages/Profile";
 
 export const App = () => {
   return (
@@ -114,7 +115,18 @@ export const App = () => {
           />
           <Route
             path="/app/profile"
-            element={<GenericScreen title="Profile" />}
+            element={
+              <>
+                <Helmet>
+                  <title>Style Profile | VOGUE.AI</title>
+                  <meta
+                    name="description"
+                    content="View wardrobe sync analytics and configure your personalized style profile body metrics."
+                  />
+                </Helmet>
+                <Profile />
+              </>
+            }
           />
           <Route
             path="/app/aesthetic"
