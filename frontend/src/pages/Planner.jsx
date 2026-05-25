@@ -20,6 +20,7 @@ export const Planner = () => {
       description: "Charcoal wool trench, tailored slate slacks, and leather oxford shoes.",
       category: "Workplace Chic",
       imgColor: "bg-surface-container-highest",
+      outfitId: "modern-minimalist",
     },
     16: {
       time: "7:30 PM • Dinner Gala",
@@ -27,6 +28,7 @@ export const Planner = () => {
       description: "Silk evening suit coupled with minimalist silver links and oxfords.",
       category: "Formal Elegance",
       imgColor: "bg-tertiary/20 border border-tertiary/30",
+      outfitId: "monochrome-discipline",
     },
     17: {
       time: "2:00 PM • Coffee Date",
@@ -34,6 +36,7 @@ export const Planner = () => {
       description: "Off-white cashmere knit paired with high-rise denim and beige boots.",
       category: "Smart Casual",
       imgColor: "bg-primary/20 border border-primary/30",
+      outfitId: "casual-sophisticate",
     },
     18: {
       time: "9:00 AM • Airport Travel",
@@ -41,6 +44,7 @@ export const Planner = () => {
       description: "Charcoal oversized hoodie, luxury track pants, and vintage trainers.",
       category: "Athleisure",
       imgColor: "bg-surface-container-high",
+      outfitId: "casual-sophisticate",
     },
     19: {
       time: "1:00 PM • Gallery Tour",
@@ -48,6 +52,7 @@ export const Planner = () => {
       description: "Structured utility jacket with rolled sleeves and raw-selvedge denim.",
       category: "Artistic/Alternative",
       imgColor: "bg-surface-bright",
+      outfitId: "urban-transitional",
     },
   };
 
@@ -108,7 +113,7 @@ export const Planner = () => {
               {activeAgenda.category}
             </span>
             <Link
-              to="/app/outfit"
+              to={`/app/outfit/${activeAgenda.outfitId || "modern-minimalist"}`}
               className="text-xs text-on-surface font-semibold underline hover:text-tertiary transition-colors"
             >
               View Details

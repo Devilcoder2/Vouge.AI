@@ -15,6 +15,7 @@ export const Header = ({ title = "VOGUE.AI", showBack = false }) => {
   const navLinks = [
     { label: "Dashboard", path: "/app" },
     { label: "Wardrobe", path: "/app/wardrobe" },
+    { label: "Recommendations", path: "/app/recommendations" },
     { label: "Stylist", path: "/app/chat" },
     { label: "Planner", path: "/app/planner" },
   ];

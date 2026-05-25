@@ -76,7 +76,7 @@ export const Dashboard = () => {
                 style={{ animationDelay: "0.5s" }}
               >
                 <button
-                  onClick={() => navigate("/app/outfit")}
+                  onClick={() => navigate("/app/outfit/modern-minimalist")}
                   className="bg-on-surface text-surface font-label-sm text-xs px-6 md:px-8 py-3.5 md:py-4 rounded-full uppercase tracking-[0.2em] hover:bg-tertiary hover:text-on-tertiary transition-all duration-500 shadow-lg cursor-pointer font-bold active:scale-95"
                 >
                   View Ensemble
@@ -190,7 +190,7 @@ export const Dashboard = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
             {/* Global Trends Card */}
             <Link
-              to="/app/discover"
+              to="/app/recommendations"
               className="group relative rounded-2xl overflow-hidden aspect-[4/3] md:aspect-auto md:h-[400px] block shadow-xl"
             >
               <img

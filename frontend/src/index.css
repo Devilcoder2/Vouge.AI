@@ -208,3 +208,26 @@ body {
   background-color: #121317;
 }
 
+/* Luxury visual gradient & Swiper deck styles */
+.luxury-text-gradient {
+  background: linear-gradient(135deg, #c8c6c5 0%, #8e9192 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.swipe-card {
+  touch-action: none;
+}
+
+.indicator-pulse {
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0% { opacity: 0.3; transform: scale(1); }
+  50% { opacity: 0.8; transform: scale(1.1); }
+  100% { opacity: 0.3; transform: scale(1); }
+}
+
+

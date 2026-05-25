@@ -13,6 +13,8 @@ import InventoryCategory from "./pages/InventoryCategory";
 import ItemDetails from "./pages/ItemDetails";
 import AddCategory from "./pages/AddCategory";
 import Profile from "./pages/Profile";
+import Suggestions from "./pages/Suggestions";
+import OutfitDetails from "./pages/OutfitDetails";
 
 export const App = () => {
   return (
@@ -111,7 +113,18 @@ export const App = () => {
           {/* Application Stubs & Fallbacks */}
           <Route
             path="/app/discover"
-            element={<GenericScreen title="Discovery Feed" />}
+            element={
+              <>
+                <Helmet>
+                  <title>Recommended Outfits | VOGUE.AI</title>
+                  <meta
+                    name="description"
+                    content="Discover AI curated outfit suggestions from your digital wardrobe archive."
+                  />
+                </Helmet>
+                <Suggestions />
+              </>
+            }
           />
           <Route
             path="/app/profile"
@@ -194,12 +207,34 @@ export const App = () => {
             element={<GenericScreen title="Verify Item" />}
           />
           <Route
-            path="/app/outfit"
-            element={<GenericScreen title="Outfit Details" />}
+            path="/app/outfit/:outfitId"
+            element={
+              <>
+                <Helmet>
+                  <title>Outfit Curation Manifest | VOGUE.AI</title>
+                  <meta
+                    name="description"
+                    content="View the AI recommended outfit curation manifest, scores, and details."
+                  />
+                </Helmet>
+                <OutfitDetails />
+              </>
+            }
           />
           <Route
             path="/app/recommendations"
-            element={<GenericScreen title="Daily Recs" />}
+            element={
+              <>
+                <Helmet>
+                  <title>Recommended Outfits | VOGUE.AI</title>
+                  <meta
+                    name="description"
+                    content="Discover AI curated outfit suggestions from your digital wardrobe archive."
+                  />
+                </Helmet>
+                <Suggestions />
+              </>
+            }
           />
           <Route
             path="/app/unlock"

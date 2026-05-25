@@ -48,9 +48,9 @@ export const MobileNav = () => {
 
       {/* Discover Link */}
       <Link
-        to="/app/discover"
+        to="/app/recommendations"
         className={`flex flex-col items-center gap-1 transition-all ${
-          isActive("/app/discover") ? "text-on-surface opacity-100" : "text-on-surface-variant opacity-60"
+          isActive("/app/recommendations") ? "text-on-surface opacity-100" : "text-on-surface-variant opacity-60"
         }`}
       >
         <span className="material-symbols-outlined text-[24px]">explore</span>

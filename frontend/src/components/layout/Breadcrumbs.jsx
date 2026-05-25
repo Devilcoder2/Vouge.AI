@@ -48,10 +48,10 @@ export const Breadcrumbs = () => {
       crumbs.push({ label: "Wardrobe", url: "/app/wardrobe" });
       crumbs.push({ label: "New Category", url: null });
     } else if (segments[0] === "outfit") {
-      crumbs.push({ label: "Planner", url: "/app/planner" });
-      crumbs.push({ label: "Outfit Details", url: null });
+      crumbs.push({ label: "Recommended Outfits", url: "/app/recommendations" });
+      crumbs.push({ label: "Curation Manifest", url: null });
     } else if (segments[0] === "recommendations") {
-      crumbs.push({ label: "Daily Recs", url: null });
+      crumbs.push({ label: "Recommended Outfits", url: null });
     } else if (segments[0] === "analysis") {
       crumbs.push({ label: "Wardrobe", url: "/app/wardrobe" });
       crumbs.push({ label: "Analysis", url: null });

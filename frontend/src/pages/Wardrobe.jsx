@@ -97,7 +97,7 @@ export const Wardrobe = () => {
               </div>
               
               <button 
-                onClick={() => navigate("/app/outfit")}
+                onClick={() => navigate("/app/recommendations")}
                 className="hidden md:flex px-10 py-4 glass-panel bg-white/5 hover:bg-white/10 text-on-surface rounded-xl font-label-sm text-[10px] uppercase tracking-[0.2em] transition-all border border-white/10 active:scale-95 cursor-pointer font-bold shadow-lg"
               >
                 Find Outfit
@@ -288,7 +288,7 @@ export const Wardrobe = () => {
             </div>
             
             <button 
-              onClick={() => navigate("/app/discover")}
+              onClick={() => navigate("/app/recommendations")}
               className="mt-8 text-on-surface-variant/40 hover:text-on-surface transition-colors font-label-sm text-[9px] uppercase tracking-[0.2em] text-left font-bold cursor-pointer"
             >
               View All History
