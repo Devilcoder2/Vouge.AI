@@ -473,3 +473,41 @@ class CommunityMember(Base):
     user = relationship("User", lazy="selectin")
 
 
+class GeneratedOutfit(Base):
+    """
+    SQLAlchemy model representing a dynamically generated outfit recommendation, cached for performance.
+    """
+    __tablename__ = "generated_outfits"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(String, nullable=False, default="default_user")
+    occasion = Column(String, nullable=False)
+    season = Column(String, nullable=False)
+    score = Column(Integer, nullable=False)
+    template_name = Column(String, nullable=True)
+    reasoning = Column(Text, nullable=True)
+    why_selected = Column(JSON, nullable=True)  # Array of strings
+    preview_url = Column(String, nullable=True)
+    breakdown = Column(JSON, nullable=True)      # Dict of scores
+    created_at = Column(DateTime(timezone=True), default=func.now())
+
+    # Relationship to intermediate items
+    items = relationship("GeneratedOutfitItem", back_populates="outfit", cascade="all, delete-orphan", lazy="selectin")
+
+
+class GeneratedOutfitItem(Base):
+    """
+    SQLAlchemy intermediate model mapping GeneratedOutfits to ClothingItems.
+    """
+    __tablename__ = "generated_outfit_items"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    outfit_id = Column(UUID(as_uuid=True), ForeignKey("generated_outfits.id", ondelete="CASCADE"), nullable=False)
+    clothing_item_id = Column(UUID(as_uuid=True), ForeignKey("clothing_items.id", ondelete="CASCADE"), nullable=False)
+
+    # Relationships
+    outfit = relationship("GeneratedOutfit", back_populates="items")
+    clothing_item = relationship("ClothingItem", lazy="selectin")
+
+
+

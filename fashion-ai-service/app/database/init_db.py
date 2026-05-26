@@ -36,7 +36,10 @@ from app.database.models import (
     PostSave,
     FashionCommunity,
     CommunityMember,
+    GeneratedOutfit,
+    GeneratedOutfitItem,
 )
+
 
 async def init_models():
     """

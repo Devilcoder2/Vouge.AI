@@ -192,6 +192,41 @@ export const formatPreviewUrl = (url) => {
   return formatImageUrl(url);
 };
 
+// ── GLOBAL DEDUPLICATION REGISTRY & HELPER ────────────────────────────────────
+const activePromises = new Map();
+
+/**
+ * Executes a fetch call, wrapping it in a de-duplication registry so that 
+ * overlapping concurrent calls with identical request signatures receive the same promise.
+ */
+const dedupeFetch = async (url, options = {}) => {
+  const method = options.method || "GET";
+  const bodyHash = options.body ? options.body : "";
+  const key = `${method}:${url}:${bodyHash}`;
+
+  if (activePromises.has(key)) {
+    console.log(`[DEDUPE] Joining existing inflight API request: ${key}`);
+    return activePromises.get(key);
+  }
+
+  const promise = (async () => {
+    const res = await fetch(url, options);
+    if (!res.ok) {
+      const errText = await res.text().catch(() => "");
+      throw new Error(`HTTP Error ${res.status}: ${errText || "Curation Engine Request failed"}`);
+    }
+    return await res.json();
+  })();
+
+  activePromises.set(key, promise);
+
+  try {
+    return await promise;
+  } finally {
+    activePromises.delete(key);
+  }
+};
+
 // Local Outfit Candidate Generator Fallback (Runs if backend empty or offline)
 const generateLocalFallbackRecommendations = (occasion = "casual", season = "autumn") => {
   const closetItems = getWardrobeItems();
@@ -199,12 +234,10 @@ const generateLocalFallbackRecommendations = (occasion = "casual", season = "aut
     return DEFAULT_OUTFITS;
   }
 
-  // Group items by category to build structured candidates
   const tops = closetItems.filter(i => i.categories.includes("tops"));
   const bottoms = closetItems.filter(i => i.categories.includes("bottoms"));
   const outerwear = closetItems.filter(i => i.categories.includes("outerwear"));
   const footwear = closetItems.filter(i => i.categories.includes("footwear") || i.categories.includes("shoes"));
-  const accessories = closetItems.filter(i => i.categories.includes("accessories"));
 
   const generated = [];
   const count = Math.min(3, Math.max(1, tops.length));
@@ -268,7 +301,6 @@ const enrichBackendItems = (backendItems) => {
   const closetItems = getWardrobeItems();
 
   return backendItems.map(item => {
-    // Look up detailed name, textile and local assets matching the ID
     const fullItem = closetItems.find(c => c.id === item.id);
     return {
       id: item.id,
@@ -277,7 +309,6 @@ const enrichBackendItems = (backendItems) => {
       name: fullItem ? fullItem.name : `${item.fit} ${item.primary_color} ${item.subcategory || item.category}`,
       textile: fullItem ? fullItem.textile : `${item.style} cut in ${item.pattern} pattern`,
       image: fullItem ? formatImageUrl(fullItem.image) : "/assets/curation_collage_feature.png",
-      // Keep backend specs
       primary_color: item.primary_color,
       primary_color_hex: item.primary_color_hex,
       fit: item.fit,
@@ -292,26 +323,22 @@ const enrichBackendItems = (backendItems) => {
 
 /**
  * 1. Generate & Retrieve Outfits List (POST /recommendations/generate-outfits)
+ * Integrates the backend GeneratedOutfit Caching layer with force_regenerate control.
  */
 export const apiGenerateOutfits = async (payload) => {
-  const { user_id = "default_user", occasion = "casual", season = "autumn" } = payload;
+  const { user_id = "default_user", occasion = "casual", season = "autumn", force_regenerate = false } = payload;
   try {
-    const res = await fetch(`${API_BASE}/generate-outfits`, {
+    const data = await dedupeFetch(`${API_BASE}/generate-outfits`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ user_id, occasion, season })
+      body: JSON.stringify({ user_id, occasion, season, force_regenerate })
     });
-    if (!res.ok) throw new Error("Backend recommendation router returned status " + res.status);
     
-    const data = await res.json();
-    
-    // If backend reports no outfits (e.g. empty database), trigger our smart fallback
     if (!data.outfits || data.outfits.length === 0) {
-      console.warn("Backend closet database is empty, compiling local fallbacks...");
+      console.warn("Backend closet database is empty or generated 0 options, compiling local fallbacks...");
       return generateLocalFallbackRecommendations(occasion, season);
     }
 
-    // Format backend response schema directly to premium frontend structure
     return data.outfits.map((outfit, index) => ({
       id: `backend-${index}-${outfit.score}-${occasion}-${season}`,
       name: outfit.template_name || `AI Recommendation #${index + 1}`,
@@ -333,7 +360,7 @@ export const apiGenerateOutfits = async (payload) => {
       preview_url: outfit.preview_url
     }));
   } catch (err) {
-    console.warn("Backend recommendations API unavailable, executing local candidate fallback:", err);
+    console.warn("Backend recommendations API error, executing local candidate fallback:", err);
     return generateLocalFallbackRecommendations(occasion, season);
   }
 };
@@ -343,7 +370,7 @@ export const apiGenerateOutfits = async (payload) => {
  */
 export const apiSaveOutfit = async (payload) => {
   try {
-    const res = await fetch(`${API_BASE}/save-outfit`, {
+    const data = await dedupeFetch(`${API_BASE}/save-outfit`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -357,8 +384,6 @@ export const apiSaveOutfit = async (payload) => {
         preview_url: payload.preview_url || null
       })
     });
-    if (!res.ok) throw new Error("Backend save-outfit returned status " + res.status);
-    const data = await res.json();
     
     // Refresh local storage saved outfits to synchronize
     await apiGetSavedOutfits(payload.user_id || "default_user");
@@ -366,7 +391,6 @@ export const apiSaveOutfit = async (payload) => {
   } catch (err) {
     console.warn("Backend save outfit API failed, using localStorage fallback:", err);
     
-    // Save locally
     let saved = [];
     try {
       const stored = localStorage.getItem(SAVED_OUTFITS_KEY);
@@ -399,11 +423,8 @@ export const apiSaveOutfit = async (payload) => {
  */
 export const apiGetSavedOutfits = async (userId = "default_user", page = 1, limit = 10) => {
   try {
-    const res = await fetch(`${API_BASE}/saved-outfits?user_id=${userId}&page=${page}&limit=${limit}`);
-    if (!res.ok) throw new Error("Backend saved-outfits returned status " + res.status);
-    const data = await res.json();
+    const data = await dedupeFetch(`${API_BASE}/saved-outfits?user_id=${userId}&page=${page}&limit=${limit}`);
     
-    // Enriched list
     const enrichedList = (data.data || data || []).map(outfit => ({
       ...outfit,
       id: outfit.id || outfit.outfit_id,
@@ -446,7 +467,6 @@ export const apiGetSavedOutfits = async (userId = "default_user", page = 1, limi
       if (stored) {
         saved = JSON.parse(stored);
       } else {
-        // Seed default stubs
         const items = getWardrobeItems();
         saved = [
           {
@@ -512,10 +532,9 @@ export const apiGetSavedOutfits = async (userId = "default_user", page = 1, limi
  */
 export const apiDeleteSavedOutfit = async (outfitId) => {
   try {
-    const res = await fetch(`${API_BASE}/saved-outfits/${outfitId}`, {
+    await dedupeFetch(`${API_BASE}/saved-outfits/${outfitId}`, {
       method: "DELETE"
     });
-    if (!res.ok) throw new Error("Backend delete saved-outfit returned status " + res.status);
     return true;
   } catch (err) {
     console.warn("Backend delete outfit failed, using localStorage fallback:", err);
@@ -539,13 +558,11 @@ export const apiDeleteSavedOutfit = async (outfitId) => {
 export const apiSubmitFeedback = async (payload) => {
   const { user_id = "default_user", outfit_item_ids = [], feedback_type = "like" } = payload;
   try {
-    const res = await fetch(`${API_BASE}/feedback`, {
+    return await dedupeFetch(`${API_BASE}/feedback`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ user_id, outfit_item_ids, feedback_type })
     });
-    if (!res.ok) throw new Error("Backend feedback API returned status " + res.status);
-    return await res.json();
   } catch (err) {
     console.warn("Backend feedback logging failed, keeping local event logs:", err);
     try {
@@ -569,14 +586,11 @@ export const apiSubmitFeedback = async (payload) => {
  */
 export const apiUpdateProfile = async (payload) => {
   try {
-    const res = await fetch(`${API_BASE}/profile`, {
+    return await dedupeFetch(`${API_BASE}/profile`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload)
     });
-    if (!res.ok) throw new Error("Backend update-profile returned status " + res.status);
-    const data = await res.json();
-    return data;
   } catch (err) {
     console.warn("Backend profile setup failed, caching in local user storage:", err);
     const current = JSON.parse(localStorage.getItem(USER_PROFILE_KEY) || "{}");
@@ -591,10 +605,7 @@ export const apiUpdateProfile = async (payload) => {
  */
 export const apiGetGapAnalysis = async (page = 1, limit = 10) => {
   try {
-    const res = await fetch(`${API_BASE}/gap-analysis?page=${page}&limit=${limit}`);
-    if (!res.ok) throw new Error("Backend gap analysis returned status " + res.status);
-    const data = await res.json();
-    return data;
+    return await dedupeFetch(`${API_BASE}/gap-analysis?page=${page}&limit=${limit}`);
   } catch (err) {
     console.warn("Backend gap analysis unavailable, returning offline calculations:", err);
     const data = [
@@ -649,10 +660,7 @@ export const apiGetGapAnalysis = async (page = 1, limit = 10) => {
  */
 export const apiGetVersatility = async (page = 1, limit = 10) => {
   try {
-    const res = await fetch(`${API_BASE}/versatility?page=${page}&limit=${limit}`);
-    if (!res.ok) throw new Error("Backend versatility endpoint returned status " + res.status);
-    const data = await res.json();
-    return data;
+    return await dedupeFetch(`${API_BASE}/versatility?page=${page}&limit=${limit}`);
   } catch (err) {
     console.warn("Backend versatility report unavailable, using local closet analysis:", err);
     const closetItems = getWardrobeItems();
@@ -691,9 +699,17 @@ export const apiGetVersatility = async (page = 1, limit = 10) => {
 
 /**
  * 9. Custom Layered Collage Generator (POST /recommendations/outfit-preview)
+ * Note: Keeps separate inflight registry handling for binary Blob-typed responses.
  */
+const activePreviewPromises = new Map();
 export const apiGenerateOutfitPreview = async (payload) => {
-  try {
+  const key = JSON.stringify(payload.clothing_item_ids);
+  if (activePreviewPromises.has(key)) {
+    console.log(`[DEDUPE] Joining active composite preview generator: ${key}`);
+    return activePreviewPromises.get(key);
+  }
+
+  const promise = (async () => {
     const res = await fetch(`${API_BASE}/outfit-preview`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -702,17 +718,23 @@ export const apiGenerateOutfitPreview = async (payload) => {
     if (!res.ok) throw new Error("Backend collage preview returned status " + res.status);
     const blob = await res.blob();
     return URL.createObjectURL(blob);
+  })();
+
+  activePreviewPromises.set(key, promise);
+
+  try {
+    return await promise;
   } catch (err) {
     console.warn("Backend outfit composite failing, using static canvas collage placeholder:", err);
     return "/assets/curation_collage_feature.png";
+  } finally {
+    activePreviewPromises.delete(key);
   }
 };
 
 // ── COMPATIBILITY EXPORTS ────────────────────────────────────────────────────
-// Keeps legacy stubs alive to avoid compile errors on other dummy views.
 export const getOutfits = () => DEFAULT_OUTFITS;
 export const getOutfit = (outfitId) => {
-  // If it's loaded from local storage saves
   try {
     const stored = localStorage.getItem(SAVED_OUTFITS_KEY);
     if (stored) {

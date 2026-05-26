@@ -33,6 +33,7 @@ export const Suggestions = () => {
   // Outfits List Async State
   const [outfits, setOutfits] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [regenerating, setRegenerating] = useState(false); // Distinguishes expensive AI sweeps
 
   // Swiper Deck States (Mobile)
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -53,25 +54,36 @@ export const Suggestions = () => {
   }, []);
 
   // Fetch Recommended Outfits based on Selected Occasion/Season
-  const fetchOutfits = async () => {
-    setLoading(true);
+  const fetchOutfits = async (forceRegenerate = false) => {
+    // API Call Lock: Prevent duplicate overlapping calls
+    if (forceRegenerate) {
+      if (regenerating) return;
+      setRegenerating(true);
+    } else {
+      if (loading && outfits.length > 0) return; // Already loading
+      setLoading(true);
+    }
+    
     setCurrentIndex(0);
     try {
       const data = await apiGenerateOutfits({
         user_id: "default_user",
         occasion: selectedOccasion,
-        season: selectedSeason
+        season: selectedSeason,
+        force_regenerate: forceRegenerate
       });
       setOutfits(data || []);
     } catch (err) {
       console.error("Failed fetching curation manifest:", err);
     } finally {
       setLoading(false);
+      setRegenerating(false);
     }
   };
 
+  // Changing dropdowns triggers instant local cache lookup (force_regenerate: false)
   useEffect(() => {
-    fetchOutfits();
+    fetchOutfits(false);
   }, [selectedOccasion, selectedSeason]);
 
   const currentOutfit = outfits[currentIndex] || null;
@@ -198,7 +210,6 @@ export const Suggestions = () => {
     const isCurrentlyLiked = !!desktopStates[outfit.id]?.liked;
     const newLiked = !isCurrentlyLiked;
     
-    // Optimistic UI updates
     setDesktopStates((prev) => ({
       ...prev,
       [outfit.id]: { ...prev[outfit.id], liked: newLiked },
@@ -289,22 +300,23 @@ export const Suggestions = () => {
         )}
 
         {/* ==================== PREMIUM FILTERS BAR ==================== */}
-        <div className="w-full max-w-container-max mx-auto px-4 pt-6 pb-2 z-10 flex flex-col sm:flex-row gap-4 items-center justify-between border-b border-white/5 select-none animate-fade-in">
-          <div className="text-center sm:text-left">
+        <div className="w-full max-w-container-max mx-auto px-4 pt-6 pb-2 z-10 flex flex-col md:flex-row gap-4 items-center justify-between border-b border-white/5 select-none animate-fade-in">
+          <div className="text-center md:text-left">
             <h2 className="font-display text-2xl luxury-text-gradient italic font-bold">Augmented Curations</h2>
             <p className="font-body-md text-[9px] text-on-surface-variant/40 tracking-wider uppercase font-semibold">
               Select Parameters to Feed Curation Engines
             </p>
           </div>
 
-          <div className="flex flex-wrap justify-center gap-3">
+          <div className="flex flex-wrap justify-center items-center gap-3">
             {/* Occasions Dropdown */}
             <div className="relative glass rounded-lg border border-white/10 px-3 py-2 flex items-center gap-2 text-xs">
               <span className="material-symbols-outlined text-[14px] text-tertiary">theater_comedy</span>
               <select
                 value={selectedOccasion}
+                disabled={loading || regenerating}
                 onChange={(e) => setSelectedOccasion(e.target.value)}
-                className="bg-transparent border-none text-on-surface focus:ring-0 focus:outline-none font-bold uppercase tracking-wider text-[10px] cursor-pointer"
+                className="bg-transparent border-none text-on-surface focus:ring-0 focus:outline-none font-bold uppercase tracking-wider text-[10px] cursor-pointer disabled:opacity-50"
               >
                 {OCCASIONS.map(occ => (
                   <option key={occ.value} value={occ.value} className="bg-surface text-on-surface">{occ.label}</option>
@@ -317,19 +329,70 @@ export const Suggestions = () => {
               <span className="material-symbols-outlined text-[14px] text-primary">filter_drama</span>
               <select
                 value={selectedSeason}
+                disabled={loading || regenerating}
                 onChange={(e) => setSelectedSeason(e.target.value)}
-                className="bg-transparent border-none text-on-surface focus:ring-0 focus:outline-none font-bold uppercase tracking-wider text-[10px] cursor-pointer"
+                className="bg-transparent border-none text-on-surface focus:ring-0 focus:outline-none font-bold uppercase tracking-wider text-[10px] cursor-pointer disabled:opacity-50"
               >
                 {SEASONS.map(sea => (
                   <option key={sea.value} value={sea.value} className="bg-surface text-on-surface">{sea.label}</option>
                 ))}
               </select>
             </div>
+
+            {/* Premium Regenerate with AI Button */}
+            <button
+              onClick={() => fetchOutfits(true)}
+              disabled={loading || regenerating}
+              className={`relative rounded-lg px-4 py-2 flex items-center gap-2 text-xs font-bold uppercase tracking-wider transition-all select-none border shadow-md active:scale-95 cursor-pointer ${
+                regenerating 
+                  ? "bg-tertiary/10 border-tertiary/40 text-tertiary" 
+                  : "bg-white/[0.02] border-tertiary/20 hover:border-tertiary/50 text-tertiary hover:bg-tertiary/5"
+              } disabled:opacity-40 disabled:cursor-not-allowed`}
+              title="Run high-fidelity Gemini AI curation over current database"
+            >
+              <span className={`material-symbols-outlined text-[15px] ${regenerating ? "animate-spin" : ""}`}>
+                {regenerating ? "progress_activity" : "auto_awesome"}
+              </span>
+              <span>{regenerating ? "Re-Curating..." : "Regenerate with AI"}</span>
+            </button>
           </div>
         </div>
 
-        {/* ==================== LOADING SKELETON / PLOT GRID ==================== */}
-        {loading ? (
+        {/* ==================== EXPENSIVE AI REGENERATION SCREEN OVERLAY ==================== */}
+        {regenerating ? (
+          <div className="flex-grow w-full max-w-md mx-auto flex flex-col items-center justify-center p-12 text-center z-10 select-none animate-fade-in">
+            <div className="relative w-32 h-32 mb-8 flex items-center justify-center">
+              {/* Outer pulse borders */}
+              <div className="absolute inset-0 rounded-full border border-tertiary/20 animate-ping opacity-60"></div>
+              <div className="absolute inset-2 rounded-full border-2 border-primary/10 animate-pulse"></div>
+              <div className="w-20 h-20 rounded-full bg-white/[0.01] border border-white/5 shadow-2xl flex items-center justify-center relative overflow-hidden group">
+                <span className="material-symbols-outlined text-4xl text-tertiary animate-spin" style={{ animationDuration: "3s" }}>
+                  sync
+                </span>
+              </div>
+            </div>
+            
+            <h3 className="font-display text-2xl text-white italic luxury-text-gradient mb-3">
+              Running Curation Models
+            </h3>
+            <p className="font-body-md text-xs text-on-surface-variant/40 tracking-[0.2em] uppercase font-bold mb-6">
+              Vogue.AI High-fidelity Deep Analysis
+            </p>
+            
+            <div className="glass p-5 rounded-xl border border-white/5 space-y-2 max-w-sm">
+              <p className="font-mono text-[9px] text-tertiary/80 uppercase tracking-widest text-left">
+                &gt; Querying embedding similarity caches...
+              </p>
+              <p className="font-mono text-[9px] text-primary/70 uppercase tracking-widest text-left">
+                &gt; Aligning silhouette balance proportions...
+              </p>
+              <p className="font-mono text-[9px] text-on-surface-variant/60 uppercase tracking-widest text-left">
+                &gt; Calling Gemini stylist explainers...
+              </p>
+            </div>
+          </div>
+        ) : loading ? (
+          /* ==================== STANDARD SKELETON LOADER ==================== */
           <div className="w-full max-w-container-max mx-auto px-4 py-12 z-10 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8 select-none">
             {[1, 2, 3].map(n => (
               <div key={n} className="rounded-2xl overflow-hidden glass border border-white/5 flex flex-col h-[520px] shadow-xl animate-pulse">

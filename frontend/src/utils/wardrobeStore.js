@@ -398,6 +398,30 @@ export const resetWardrobe = () => {
 
 const API_BASE = "http://localhost:8000/api/wardrobe";
 
+const originalFetch = window.fetch;
+const activePromises = new Map();
+
+const fetch = async (url, options = {}) => {
+  const method = options.method || "GET";
+  const bodyHash = options.body ? (typeof options.body === "string" ? options.body : "formdata") : "";
+  const key = `${method}:${url}:${bodyHash}`;
+
+  if (activePromises.has(key)) {
+    console.log(`[DEDUPE] Joining existing inflight wardrobe request: ${key}`);
+    return activePromises.get(key);
+  }
+
+  const promise = originalFetch(url, options);
+  activePromises.set(key, promise);
+
+  try {
+    const res = await promise;
+    return res.clone();
+  } finally {
+    activePromises.delete(key);
+  }
+};
+
 export const formatImageUrl = (url) => {
   if (!url) return "/assets/curation_collage_feature.png";
   if (url.startsWith("/v1/media/") || url.startsWith("/api/")) {

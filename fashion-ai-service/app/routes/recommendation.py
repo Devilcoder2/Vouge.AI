@@ -2,7 +2,7 @@ import logging
 import uuid
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from fastapi.responses import FileResponse, Response
-from sqlalchemy import func
+from sqlalchemy import func, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from uuid import UUID, uuid4
@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 
 from app.config import settings
 from app.database.session import get_db
-from app.database.models import ClothingItem, SavedOutfit, SavedOutfitItem, UserProfile, UserFeedback
+from app.database.models import ClothingItem, SavedOutfit, SavedOutfitItem, UserProfile, UserFeedback, GeneratedOutfit, GeneratedOutfitItem
 from app.schemas.recommendation import (
     GenerateOutfitsRequest,
     GenerateOutfitsResponse,
@@ -61,6 +61,76 @@ async def generate_outfits(
     Step 13 Route: Generates compatible outfits, ranks and diversifies choices,
     curates stylist explanations via Gemini, and evaluates recommendation lists.
     """
+    # 0. Check cache if not force regenerating
+    if not payload.force_regenerate:
+        try:
+            result_cached = await db.execute(
+                select(GeneratedOutfit)
+                .where(
+                    GeneratedOutfit.user_id == payload.user_id,
+                    GeneratedOutfit.occasion == payload.occasion,
+                    GeneratedOutfit.season == payload.season
+                )
+                .order_by(GeneratedOutfit.created_at.desc())
+            )
+            cached_outfits = result_cached.scalars().all()
+            if cached_outfits:
+                logger.info(f"Returning {len(cached_outfits)} cached outfit recommendations for user {payload.user_id} ({payload.occasion}, {payload.season})")
+                response_outfits = []
+                for outfit in cached_outfits:
+                    res_items = []
+                    for link in outfit.items:
+                        gi = link.clothing_item
+                        if gi:
+                            res_items.append(
+                                RecommendationItemResponse(
+                                    id=gi.id,
+                                    category=gi.category,
+                                    subcategory=gi.subcategory or "",
+                                    primary_color=gi.primary_color,
+                                    primary_color_hex=gi.primary_color_hex or "#ffffff",
+                                    fit=gi.fit,
+                                    style=gi.style,
+                                    formality=gi.formality,
+                                    pattern=gi.pattern
+                                )
+                            )
+                    
+                    bk = outfit.breakdown or {}
+                    response_outfits.append(
+                        SingleOutfitResponse(
+                            score=outfit.score,
+                            items=res_items,
+                            reasoning=outfit.reasoning or "A curated styling selection.",
+                            template_name=outfit.template_name or "Custom Template",
+                            breakdown=OutfitScoreBreakdown(
+                                color_score=bk.get("color_score", 90),
+                                style_score=bk.get("style_score", 90),
+                                occasion_score=bk.get("occasion_score", 90),
+                                formality_score=bk.get("formality_score", 90),
+                                season_score=bk.get("season_score", 90)
+                            ),
+                            why_selected=outfit.why_selected or [],
+                            preview_url=outfit.preview_url,
+                        )
+                    )
+                
+                # Evaluate diversity using list-of-dicts representation
+                outfits_dict_repr = [
+                    {
+                        "score": o.score,
+                        "items": [
+                            {"id": it.id, "category": it.category}
+                            for it in o.items
+                        ]
+                    }
+                    for o in response_outfits
+                ]
+                diversity_eval = QualityEvaluator.evaluate_recommendations_diversity(outfits_dict_repr)
+                return GenerateOutfitsResponse(outfits=response_outfits, diversity_eval=diversity_eval)
+        except Exception as cache_err:
+            logger.warning(f"Error querying recommendation cache: {cache_err}")
+
     # 1. Fetch user closet items
     result = await db.execute(select(ClothingItem))
     db_items = result.scalars().all()
@@ -259,8 +329,54 @@ async def generate_outfits(
                 )
             )
 
-            
+        # Cache the newly generated outfits for future calls
+        try:
+            # A. Delete stale cache for this user + occasion + season
+            await db.execute(
+                delete(GeneratedOutfit)
+                .where(
+                    GeneratedOutfit.user_id == payload.user_id,
+                    GeneratedOutfit.occasion == payload.occasion,
+                    GeneratedOutfit.season == payload.season
+                )
+            )
+            # B. Save new outfits to cache database tables
+            for outfit in response_outfits:
+                db_gen_outfit = GeneratedOutfit(
+                    id=uuid4(),
+                    user_id=payload.user_id,
+                    occasion=payload.occasion,
+                    season=payload.season,
+                    score=outfit.score,
+                    template_name=outfit.template_name,
+                    reasoning=outfit.reasoning,
+                    why_selected=outfit.why_selected,
+                    preview_url=outfit.preview_url,
+                    breakdown={
+                        "color_score": outfit.breakdown.color_score,
+                        "style_score": outfit.breakdown.style_score,
+                        "occasion_score": outfit.breakdown.occasion_score,
+                        "formality_score": outfit.breakdown.formality_score,
+                        "season_score": outfit.breakdown.season_score
+                    }
+                )
+                db.add(db_gen_outfit)
+                
+                # Link garments to generated outfit items
+                for it in outfit.items:
+                    link = GeneratedOutfitItem(
+                        id=uuid4(),
+                        outfit_id=db_gen_outfit.id,
+                        clothing_item_id=it.id
+                    )
+                    db.add(link)
+            await db.commit()
+            logger.info(f"Successfully cached {len(response_outfits)} generated outfit recommendations for user {payload.user_id}")
+        except Exception as cache_save_err:
+            logger.error(f"Failed to cache generated outfits: {cache_save_err}")
+
         return GenerateOutfitsResponse(outfits=response_outfits, diversity_eval=diversity_eval)
+
 
         
     except Exception as e:

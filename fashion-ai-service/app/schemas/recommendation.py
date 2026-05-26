@@ -10,6 +10,8 @@ class GenerateOutfitsRequest(BaseModel):
     user_id: Optional[str] = Field("default_user", description="Identifier of the user closet owner")
     occasion: str = Field(..., description="Target occasion for styling, e.g. casual, office, date, gym, wedding")
     season: str = Field(..., description="Target weather season: spring, summer, autumn, winter")
+    force_regenerate: Optional[bool] = Field(False, description="True to bypass cached outfits and run full AI generation")
+
 
 class RecommendationItemResponse(BaseModel):
     id: UUID

@@ -126,14 +126,22 @@ def test_api_generate_outfits_endpoint(mock_closet_items, monkeypatch):
     # Mock the database select call to return our mock closet items
     async def mock_get_db():
         class MockResult:
+            def __init__(self, stmt):
+                self.stmt_str = str(stmt)
             def scalars(self):
                 class MockScalars:
+                    def __init__(self, stmt_str):
+                        self.stmt_str = stmt_str
                     def all(self):
+                        if "generated_outfits" in self.stmt_str:
+                            return []
                         return mock_closet_items
-                return MockScalars()
+                return MockScalars(self.stmt_str)
         class MockDB:
             async def execute(self, stmt):
-                return MockResult()
+                return MockResult(stmt)
+            def add(self, obj): pass
+            async def commit(self): pass
         yield MockDB()
 
     app.dependency_overrides[get_db] = mock_get_db
@@ -309,4 +317,90 @@ def test_moat_analysis_endpoints(mock_closet_items):
     assert vers_data["meta"]["pageSize"] == 3
     
     app.dependency_overrides.clear()
+
+
+def test_recommendation_caching_flow(mock_closet_items):
+    """
+    Tests the recommendation caching flow:
+    1. First call with empty cache triggers generation and saves generated outfits to cache.
+    2. Second call retrieves cached outfits, saving expensive candidate generation and scoring runs.
+    """
+    class MockGeneratedOutfitItemLink:
+        def __init__(self, gi):
+            self.clothing_item = gi
+
+    class MockGeneratedOutfitModel:
+        def __init__(self):
+            self.id = uuid.uuid4()
+            self.user_id = "cache_test_user"
+            self.occasion = "office"
+            self.season = "autumn"
+            self.score = 95
+            self.template_name = "Modern Minimalist"
+            self.reasoning = "Cached elegance."
+            self.why_selected = ["Monochrome basic alignment."]
+            self.preview_url = "/recommendations/preview-image/mock_cached.png"
+            self.breakdown = {
+                "color_score": 98,
+                "style_score": 92,
+                "occasion_score": 90,
+                "formality_score": 95,
+                "season_score": 100
+            }
+            self.created_at = datetime.now(timezone.utc)
+            self.items = [MockGeneratedOutfitItemLink(mock_closet_items[0]), MockGeneratedOutfitItemLink(mock_closet_items[3])]
+
+    cached_db = [] # Initially empty cache
+
+    async def mock_get_db():
+        class MockResult:
+            def __init__(self, stmt):
+                self.stmt_str = str(stmt)
+            def scalars(self):
+                class MockScalars:
+                    def __init__(self, stmt_str):
+                        self.stmt_str = stmt_str
+                    def all(self):
+                        if "generated_outfits" in self.stmt_str:
+                            if len(cached_db) > 0:
+                                return [MockGeneratedOutfitModel()]
+                            return []
+                        return mock_closet_items
+                return MockScalars(self.stmt_str)
+        class MockDB:
+            async def execute(self, stmt):
+                return MockResult(stmt)
+            def add(self, obj):
+                # When caching, store the GeneratedOutfit objects in cached_db to simulate cache persistence
+                if obj.__class__.__name__ == "GeneratedOutfit":
+                    cached_db.append(obj)
+            async def commit(self): pass
+        yield MockDB()
+
+    app.dependency_overrides[get_db] = mock_get_db
+
+    request_payload = {
+        "occasion": "office",
+        "season": "autumn",
+        "user_id": "cache_test_user",
+        "force_regenerate": False
+    }
+
+    # First request: empty cache -> triggers full generation + saves to cache
+    resp1 = client.post("/recommendations/generate-outfits", json=request_payload)
+    assert resp1.status_code == 200
+    data1 = resp1.json()
+    assert len(data1["outfits"]) > 0
+    # Our mock db should now have captured the caching add calls
+    assert len(cached_db) > 0
+
+    # Second request: cache hit -> returns cached results instantly
+    resp2 = client.post("/recommendations/generate-outfits", json=request_payload)
+    assert resp2.status_code == 200
+    data2 = resp2.json()
+    assert len(data2["outfits"]) == 1
+    assert data2["outfits"][0]["reasoning"] == "Cached elegance."
+
+    app.dependency_overrides.clear()
+
 
