@@ -115,3 +115,33 @@ class RecreateResponse(BaseModel):
     slots: List[RecreateSlotMatch] = []
     style_persona: Optional[str] = None
     weather_context: Optional[str] = None
+
+
+class TrendingPersonaResponse(BaseModel):
+    name: str
+    post_count: int
+    popular_image_url: Optional[str] = None
+
+
+class PopularCreatorResponse(BaseModel):
+    id: UUID
+    username: str
+    vanity_username: Optional[str] = None
+    avatar_url: Optional[str] = None
+    verified_badge: bool
+    style_personas: List[str] = []
+    followers_count: int
+    is_followed_by_user: bool = False
+
+
+class TrendingOccasionResponse(BaseModel):
+    name: str
+    post_count: int
+
+
+class ExploreResponse(BaseModel):
+    trending_posts: List[PostResponse]
+    trending_personas: List[TrendingPersonaResponse]
+    popular_creators: List[PopularCreatorResponse]
+    trending_occasions: List[TrendingOccasionResponse]
+

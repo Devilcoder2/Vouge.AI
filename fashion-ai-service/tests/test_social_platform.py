@@ -41,8 +41,9 @@ def mock_db_session(monkeypatch):
             self.tagged_items = []
 
     class MockResult:
-        def __init__(self, data=None):
+        def __init__(self, data=None, raw_all=False):
             self.data = data or []
+            self.raw_all = raw_all
         def scalar_one_or_none(self):
             return self.data[0] if self.data else None
         def scalar_one(self):
@@ -53,6 +54,8 @@ def mock_db_session(monkeypatch):
                     return self.data
             return MockScalars()
         def all(self):
+            if self.raw_all:
+                return self.data
             return [(d, None) for d in self.data]
 
     class MockDB:
@@ -63,7 +66,11 @@ def mock_db_session(monkeypatch):
         async def execute(self, stmt):
             # Inspect SQL representation for testing routers mapping
             stmt_str = str(stmt).lower()
-            if "users" in stmt_str:
+            if "style_persona" in stmt_str and "count" in stmt_str:
+                return MockResult([("streetwear", 1, "http://image.png")], raw_all=True)
+            elif "occasion_tag" in stmt_str and "count" in stmt_str:
+                return MockResult([("casual", 1)], raw_all=True)
+            elif "users" in stmt_str:
                 if "ilike" in stmt_str:
                     # User profile fetch
                     return MockResult([MockUser(test_user_id, "social_curator")])
@@ -173,3 +180,27 @@ def test_feed_listing_routers(mock_db_session):
     response = client.get("/v1/social/feed/curated")
     assert response.status_code == 200
     assert isinstance(response.json(), list)
+
+
+def test_explore_showroom(mock_db_session):
+    """Verifies that GET /v1/social/explore retrieves aggregates successfully."""
+    response = client.get("/v1/social/explore")
+    assert response.status_code == 200
+    data = response.json()
+    assert "trending_posts" in data
+    assert "trending_personas" in data
+    assert "popular_creators" in data
+    assert "trending_occasions" in data
+
+    assert len(data["trending_personas"]) > 0
+    assert data["trending_personas"][0]["name"] == "streetwear"
+    assert data["trending_personas"][0]["post_count"] == 1
+    assert data["trending_personas"][0]["popular_image_url"] == "http://image.png"
+
+    assert len(data["trending_occasions"]) > 0
+    assert data["trending_occasions"][0]["name"] == "casual"
+    assert data["trending_occasions"][0]["post_count"] == 1
+
+    assert len(data["popular_creators"]) > 0
+    assert data["popular_creators"][0]["username"] == "social_curator"
+

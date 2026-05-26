@@ -3,7 +3,7 @@ from uuid import UUID, uuid4
 from typing import List, Optional
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, status, Query
-from sqlalchemy import select, func, and_, delete
+from sqlalchemy import select, func, and_, delete, desc
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.session import get_db
@@ -13,7 +13,8 @@ from app.database.models import (
 from app.routes.wardrobe import get_optional_current_user, map_clothing_item_to_response
 from app.schemas.social import (
     SocialUserProfileResponse, FollowActionRequest, PostCreateRequest, PostResponse,
-    CommentCreateRequest, CommentResponse, RecreateResponse, RecreateSlotMatch, PostTaggedItemResponse
+    CommentCreateRequest, CommentResponse, RecreateResponse, RecreateSlotMatch, PostTaggedItemResponse,
+    ExploreResponse, TrendingPersonaResponse, PopularCreatorResponse, TrendingOccasionResponse
 )
 from app.services.recreation import OutfitRecreationService
 
@@ -480,3 +481,103 @@ async def recreate_creator_outfit(
         style_persona=post.style_persona,
         weather_context=post.weather_context
     )
+
+
+@router.get("/explore", response_model=ExploreResponse)
+async def explore_style_showroom(
+    db: AsyncSession = Depends(get_db),
+    current_user: Optional[User] = Depends(get_optional_current_user)
+):
+    """
+    Retrieves discovery page aggregations including trending posts, 
+    highly active style personas, popular creators, and top occasions.
+    """
+    # Active user fallback for testing
+    actor_id = current_user.id if current_user else UUID("00000000-0000-0000-0000-000000000001")
+
+    # 1. Trending Posts (sorted by created_at desc)
+    posts_stmt = select(SocialPost).order_by(SocialPost.created_at.desc()).limit(5)
+    posts_res = await db.execute(posts_stmt)
+    posts = posts_res.scalars().all()
+
+    # Hydrate posts
+    from app.routes.feed import map_posts_to_response
+    trending_posts = await map_posts_to_response(posts, actor_id, db)
+
+    # 2. Trending Personas (aggregate from SocialPost table)
+    persona_stmt = (
+        select(
+            SocialPost.style_persona,
+            func.count(SocialPost.id).label("post_count"),
+            func.max(SocialPost.image_url).label("popular_image_url")
+        )
+        .where(SocialPost.style_persona.isnot(None))
+        .group_by(SocialPost.style_persona)
+        .order_by(desc("post_count"))
+        .limit(6)
+    )
+    persona_res = await db.execute(persona_stmt)
+    trending_personas = [
+        TrendingPersonaResponse(
+            name=row[0],
+            post_count=row[1],
+            popular_image_url=row[2]
+        ) for row in persona_res.all()
+    ]
+
+    # 3. Trending Occasions (aggregate from SocialPost table)
+    occasion_stmt = (
+        select(
+            SocialPost.occasion_tag,
+            func.count(SocialPost.id).label("post_count")
+        )
+        .where(SocialPost.occasion_tag.isnot(None))
+        .group_by(SocialPost.occasion_tag)
+        .order_by(desc("post_count"))
+        .limit(6)
+    )
+    occasion_res = await db.execute(occasion_stmt)
+    trending_occasions = [
+        TrendingOccasionResponse(
+            name=row[0],
+            post_count=row[1]
+        ) for row in occasion_res.all()
+    ]
+
+    # 4. Popular Creators (Users with high follower count)
+    creators_stmt = select(User).where(User.id != actor_id).limit(5)
+    creators_res = await db.execute(creators_stmt)
+    creators = creators_res.scalars().all()
+
+    popular_creators = []
+    for creator in creators:
+        followers_count = await db.scalar(
+            select(func.count(UserFollow.follower_id)).where(UserFollow.following_id == creator.id)
+        ) or 0
+        
+        is_followed = await db.scalar(
+            select(func.count(UserFollow.follower_id)).where(
+                and_(UserFollow.follower_id == actor_id, UserFollow.following_id == creator.id)
+            )
+        ) > 0
+
+        popular_creators.append(PopularCreatorResponse(
+            id=creator.id,
+            username=creator.username,
+            vanity_username=creator.vanity_username or creator.username,
+            avatar_url=creator.avatar_url or f"https://api.dicebear.com/7.x/initials/svg?seed={creator.username}",
+            verified_badge=creator.verified_badge or False,
+            style_personas=creator.style_personas or ["minimalist"],
+            followers_count=followers_count,
+            is_followed_by_user=is_followed
+        ))
+
+    popular_creators.sort(key=lambda x: x.followers_count, reverse=True)
+
+    return ExploreResponse(
+        trending_posts=trending_posts,
+        trending_personas=trending_personas,
+        popular_creators=popular_creators,
+        trending_occasions=trending_occasions
+    )
+
