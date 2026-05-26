@@ -52,6 +52,7 @@ async def map_posts_to_response(
             weather_context=post.weather_context,
             occasion_tag=post.occasion_tag,
             style_persona=post.style_persona,
+            community_id=post.community_id,
             created_at=post.created_at,
             likes_count=likes_count,
             comments_count=comments_count,

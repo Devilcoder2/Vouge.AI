@@ -54,6 +54,7 @@ class PostCreateRequest(BaseModel):
     weather_context: Optional[str] = None
     occasion_tag: Optional[str] = None
     style_persona: Optional[str] = None
+    community_id: Optional[UUID] = None
     tagged_items: List[PostTaggedItemRequest] = []
 
 
@@ -87,6 +88,7 @@ class PostResponse(BaseModel):
     weather_context: Optional[str] = None
     occasion_tag: Optional[str] = None
     style_persona: Optional[str] = None
+    community_id: Optional[UUID] = None
     created_at: datetime
     likes_count: int
     comments_count: int

@@ -34,6 +34,8 @@ from app.database.models import (
     PostLike,
     PostComment,
     PostSave,
+    FashionCommunity,
+    CommunityMember,
 )
 
 async def init_models():
@@ -111,6 +113,11 @@ async def init_models():
             ))
             await conn.execute(text(
                 "ALTER TABLE clothing_items ADD COLUMN IF NOT EXISTS categories VARCHAR[];"
+            ))
+
+            # safe online migrations for social posts community extensions
+            await conn.execute(text(
+                "ALTER TABLE social_posts ADD COLUMN IF NOT EXISTS community_id UUID;"
             ))
 
             # Seed default categories

@@ -161,6 +161,7 @@ async def create_outfit_post(
         weather_context=payload.weather_context,
         occasion_tag=payload.occasion_tag,
         style_persona=payload.style_persona,
+        community_id=payload.community_id,
         created_at=datetime.now(timezone.utc)
     )
     db.add(new_post)
@@ -194,6 +195,7 @@ async def create_outfit_post(
         weather_context=reloaded.weather_context,
         occasion_tag=reloaded.occasion_tag,
         style_persona=reloaded.style_persona,
+        community_id=reloaded.community_id,
         created_at=reloaded.created_at,
         likes_count=0,
         comments_count=0,
@@ -257,6 +259,7 @@ async def get_outfit_post(
         weather_context=post.weather_context,
         occasion_tag=post.occasion_tag,
         style_persona=post.style_persona,
+        community_id=post.community_id,
         created_at=post.created_at,
         likes_count=likes_count,
         comments_count=comments_count,

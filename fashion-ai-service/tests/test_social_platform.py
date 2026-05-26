@@ -38,6 +38,7 @@ def mock_db_session(monkeypatch):
             self.occasion_tag = "casual"
             self.style_persona = "streetwear"
             self.created_at = datetime.now(timezone.utc)
+            self.community_id = None
             self.tagged_items = []
 
     class MockResult:

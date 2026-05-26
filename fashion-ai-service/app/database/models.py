@@ -340,12 +340,15 @@ class SocialPost(Base):
     created_at = Column(DateTime(timezone=True), default=func.now())
     updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now())
 
+    community_id = Column(UUID(as_uuid=True), ForeignKey("fashion_communities.id", ondelete="SET NULL"), nullable=True, index=True)
+
     # Relationships
     user = relationship("User", back_populates="posts")
     tagged_items = relationship("PostTaggedItem", back_populates="post", cascade="all, delete-orphan", lazy="selectin")
     likes = relationship("PostLike", back_populates="post", cascade="all, delete-orphan")
     comments = relationship("PostComment", back_populates="post", cascade="all, delete-orphan", lazy="selectin")
     saves = relationship("PostSave", back_populates="post", cascade="all, delete-orphan")
+    community = relationship("FashionCommunity", back_populates="posts")
 
 
 class ExternalProduct(Base):
@@ -431,4 +434,42 @@ class PostSave(Base):
     created_at = Column(DateTime(timezone=True), default=func.now())
 
     post = relationship("SocialPost", back_populates="saves")
+
+
+class FashionCommunity(Base):
+    """
+    SQLAlchemy model representing a styling fashion community (e.g. Streetwear, Quiet Luxury).
+    """
+    __tablename__ = "fashion_communities"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    name = Column(String(100), nullable=False, unique=True)
+    slug = Column(String(100), nullable=False, unique=True, index=True)
+    description = Column(Text, nullable=True)
+    cover_image_url = Column(String, nullable=True)
+    rules = Column(Text, nullable=True)
+    creator_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    created_at = Column(DateTime(timezone=True), default=func.now())
+    updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now())
+
+    # Relationships
+    posts = relationship("SocialPost", back_populates="community")
+    members = relationship("CommunityMember", back_populates="community", cascade="all, delete-orphan")
+
+
+class CommunityMember(Base):
+    """
+    SQLAlchemy model representing community membership and roles (member, moderator, admin).
+    """
+    __tablename__ = "community_members"
+
+    community_id = Column(UUID(as_uuid=True), ForeignKey("fashion_communities.id", ondelete="CASCADE"), primary_key=True)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    role = Column(String(30), nullable=False, default="member")  # member, moderator, admin
+    joined_at = Column(DateTime(timezone=True), default=func.now())
+
+    # Relationships
+    community = relationship("FashionCommunity", back_populates="members")
+    user = relationship("User", lazy="selectin")
+
 
