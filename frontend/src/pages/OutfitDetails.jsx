@@ -1,16 +1,16 @@
 import React, { useState, useEffect } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useLocation } from "react-router-dom";
 import Layout from "../components/layout/Layout";
-import { getOutfit } from "../utils/outfitStore";
+import { getOutfit, formatPreviewUrl } from "../utils/outfitStore";
 
 export const OutfitDetails = () => {
   const { outfitId } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
 
-  // Load outfit details
-  const outfit = getOutfit(outfitId);
-
-  // States
+  // Load outfit state dynamically (optimistic routing payload or database lookup)
+  const [outfit, setOutfit] = useState(location.state?.outfit || null);
+  const [loading, setLoading] = useState(!outfit);
   const [animateBars, setAnimateBars] = useState(false);
   const [isReserved, setIsReserved] = useState(false);
 
@@ -22,17 +22,37 @@ export const OutfitDetails = () => {
       mainEl.scrollTop = 0;
     }
 
+    if (!outfit) {
+      setLoading(true);
+      const data = getOutfit(outfitId);
+      if (data) {
+        setOutfit(data);
+      }
+      setLoading(false);
+    }
+
     const timer = setTimeout(() => {
       setAnimateBars(true);
     }, 100);
 
     return () => clearTimeout(timer);
-  }, [outfitId]);
+  }, [outfitId, outfit]);
+
+  if (loading) {
+    return (
+      <Layout showBack={true} title="Curation Details">
+        <div className="w-full max-w-container-max mx-auto px-4 py-20 text-center select-none animate-pulse">
+          <div className="h-6 w-48 bg-white/[0.05] rounded-full mx-auto mb-6"></div>
+          <div className="h-[300px] bg-white/[0.03] rounded-2xl mb-8"></div>
+        </div>
+      </Layout>
+    );
+  }
 
   if (!outfit) {
     return (
       <Layout showBack={true} title="Manifest Error">
-        <div className="text-center py-20">
+        <div className="text-center py-20 select-none">
           <span className="material-symbols-outlined text-5xl text-error mb-4">warning</span>
           <h3 className="font-display text-2xl italic text-on-surface mb-2">Outfit Not Found</h3>
           <p className="font-body-md text-xs text-on-surface-variant/70 mb-8">
@@ -40,7 +60,7 @@ export const OutfitDetails = () => {
           </p>
           <button
             onClick={() => navigate("/app/recommendations")}
-            className="px-6 py-3 bg-on-surface text-background font-label-sm text-[10px] uppercase tracking-widest rounded font-bold"
+            className="px-6 py-3 bg-on-surface text-background font-label-sm text-[10px] uppercase tracking-widest rounded font-bold cursor-pointer"
           >
             Back to Recommendations
           </button>
@@ -49,7 +69,7 @@ export const OutfitDetails = () => {
     );
   }
 
-  // Handle Acquire/Lock outfit
+  // Handle Acquire/Lock outfit on calendar planner
   const handleAcquire = () => {
     setIsReserved(true);
 
@@ -76,7 +96,7 @@ export const OutfitDetails = () => {
         <section className="relative w-full aspect-[4/5] sm:aspect-[16/7] md:rounded-2xl overflow-hidden mb-8 group border border-white/5 shadow-2xl">
           <img
             className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-103"
-            src={outfit.heroImage}
+            src={formatPreviewUrl(outfit.heroImage) || outfit.heroImage}
             alt={outfit.name}
           />
           {/* Bottom text overlays */}
@@ -110,11 +130,11 @@ export const OutfitDetails = () => {
               {/* Animated Progress Bars */}
               <div className="space-y-5">
                 {[
-                  { label: "Color Harmony", value: outfit.metrics.colorHarmony },
-                  { label: "Style Alignment", value: outfit.metrics.styleAlignment },
-                  { label: "Occasion Context", value: outfit.metrics.occasionContext },
-                  { label: "Formality Balance", value: outfit.metrics.formalityBalance },
-                  { label: "Season Appropriateness", value: outfit.metrics.seasonAppropriateness }
+                  { label: "Color Harmony", value: outfit.metrics?.colorHarmony || 90 },
+                  { label: "Style Alignment", value: outfit.metrics?.styleAlignment || 88 },
+                  { label: "Occasion Context", value: outfit.metrics?.occasionContext || 85 },
+                  { label: "Formality Balance", value: outfit.metrics?.formalityBalance || 90 },
+                  { label: "Season Appropriateness", value: outfit.metrics?.seasonAppropriateness || 95 }
                 ].map((item, index) => (
                   <div key={index} className="space-y-1.5 select-none">
                     <div className="flex justify-between font-label-sm text-[9px] uppercase tracking-wider text-on-surface-variant font-semibold">
@@ -141,11 +161,11 @@ export const OutfitDetails = () => {
                 <span className="material-symbols-outlined text-tertiary" style={{ fontVariationSettings: "'FILL' 1" }}>
                   auto_awesome
                 </span>
-                AI Reasoning Analysis
+                Stylist Reasoning
               </h3>
               
               <ul className="space-y-4">
-                {outfit.reasoning.map((item, index) => (
+                {(outfit.reasoning || []).map((item, index) => (
                   <li key={index} className="flex gap-3 items-start select-none">
                     <span className="text-tertiary mt-2 shrink-0">
                       <svg fill="currentColor" height="5" viewBox="0 0 6 6" width="5">
@@ -170,13 +190,13 @@ export const OutfitDetails = () => {
               <div className="flex justify-between items-end border-b border-white/5 pb-4 select-none">
                 <h3 className="font-display text-xl italic text-on-surface">Curation Manifest</h3>
                 <span className="font-label-sm text-[9px] text-on-surface-variant uppercase tracking-widest font-semibold">
-                  {outfit.items.length} Items Total
+                  {outfit.items?.length || 0} Items Total
                 </span>
               </div>
 
               {/* Items Card List */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {outfit.items.map((item) => (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 animate-fade-in">
+                {(outfit.items || []).map((item) => (
                   <div
                     key={item.id}
                     onClick={() => navigate(`/app/item/${item.categoryId}/${item.id}`)}

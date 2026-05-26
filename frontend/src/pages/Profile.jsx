@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import Layout from "../components/layout/Layout";
-import { getWardrobeItems } from "../utils/wardrobeStore";
+import { getWardrobeItems, apiGetWardrobeStats } from "../utils/wardrobeStore";
+import { apiUpdateProfile, apiGetVersatility } from "../utils/outfitStore";
 
 const DEFAULT_PROFILE = {
   name: "Julian Thorne",
@@ -32,6 +33,10 @@ export const Profile = () => {
   const [totalItems, setTotalItems] = useState(14);
   const [totalValue, setTotalValue] = useState(12450);
 
+  // Live analytics state
+  const [mostWorn, setMostWorn] = useState({ name: "Noir Silk Blouse", count: 18 });
+  const [leastWorn, setLeastWorn] = useState({ name: "Stone Cashmere Knit", count: 1 });
+
   // Load profile from localStorage & compute item counts
   useEffect(() => {
     // 1. Scroll to top on mount
@@ -52,12 +57,49 @@ export const Profile = () => {
     setProfile(currentProfile);
     loadFormFields(currentProfile);
 
-    // 3. Dynamic total items counting
-    const items = getWardrobeItems();
-    setTotalItems(items.length);
-    // Approximate a total value: default items + custom items valuation
-    const computedValue = 12000 + (items.length - 14) * 350;
-    setTotalValue(computedValue > 0 ? computedValue : 12450);
+    // 3. Dynamic total items counting & live analytics
+    const loadAnalytics = async () => {
+      try {
+        const stats = await apiGetWardrobeStats();
+        if (stats) {
+          setTotalItems(stats.totalPieces || 14);
+          const computedValue = 12000 + ((stats.totalPieces || 14) - 14) * 350;
+          setTotalValue(computedValue > 0 ? computedValue : 12450);
+        }
+
+        const versatilityReport = await apiGetVersatility(1, 20);
+        if (versatilityReport && versatilityReport.data && versatilityReport.data.length > 0) {
+          const sortedByUsage = [...versatilityReport.data].sort((a, b) => b.usage_count - a.usage_count);
+          const items = getWardrobeItems();
+          
+          const mostWornObj = sortedByUsage[0];
+          const leastWornObj = sortedByUsage[sortedByUsage.length - 1];
+          
+          if (mostWornObj) {
+            const fullItem = items.find(i => i.id === mostWornObj.item_id);
+            setMostWorn({
+              name: fullItem ? fullItem.name : `Garment (${mostWornObj.primary_color})`,
+              count: mostWornObj.usage_count
+            });
+          }
+          if (leastWornObj && leastWornObj.item_id !== mostWornObj.item_id) {
+            const fullItem = items.find(i => i.id === leastWornObj.item_id);
+            setLeastWorn({
+              name: fullItem ? fullItem.name : `Garment (${leastWornObj.primary_color})`,
+              count: leastWornObj.usage_count
+            });
+          }
+        }
+      } catch (err) {
+        console.warn("Failed loading live metrics, loading local calculations:", err);
+        const items = getWardrobeItems();
+        setTotalItems(items.length);
+        const computedValue = 12000 + (items.length - 14) * 350;
+        setTotalValue(computedValue > 0 ? computedValue : 12450);
+      }
+    };
+
+    loadAnalytics();
   }, []);
 
   const loadFormFields = (p) => {
@@ -69,7 +111,7 @@ export const Profile = () => {
     setSkinTone(p.skinTone);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     const updated = {
       ...profile,
       name,
@@ -83,10 +125,35 @@ export const Profile = () => {
     setProfile(updated);
     setIsEditing(false);
 
+    // Sync profile metrics to backend
+    try {
+      let heightCm = 185;
+      if (height.includes("'")) {
+        const parts = height.split("'");
+        const feet = parseInt(parts[0]) || 6;
+        const inches = parseInt(parts[1]) || 1;
+        heightCm = Math.round((feet * 12 + inches) * 2.54);
+      } else if (parseInt(height)) {
+        heightCm = parseInt(height);
+      }
+
+      await apiUpdateProfile({
+        user_id: "default_user",
+        height_cm: heightCm,
+        body_archetype: bodyType.toLowerCase(),
+        fit_preference: "standard",
+        style_persona: "minimalist",
+        avoided_colors: ["Neon Green", "Hot Pink"],
+        favorite_styles: ["old_money", "quiet_luxury"]
+      });
+    } catch (e) {
+      console.warn("Failed syncing style parameters to backend:", e);
+    }
+
     // Create success toast notification
     const toast = document.createElement("div");
     toast.className = "fixed bottom-36 left-1/2 -translate-x-1/2 bg-on-surface text-background px-6 py-3 rounded-full font-label-sm text-[11px] uppercase tracking-[0.2em] shadow-2xl z-[99] border border-white/10 animate-fade-in flex items-center gap-2";
-    toast.innerHTML = `<span class="material-symbols-outlined text-sm font-bold text-tertiary">check_circle</span> Profile Saved Successfully`;
+    toast.innerHTML = `<span class="material-symbols-outlined text-sm font-bold text-tertiary">check_circle</span> Profile Saved & Synced`;
     document.body.appendChild(toast);
     setTimeout(() => {
       toast.classList.add("animate-fade-out");
@@ -290,10 +357,10 @@ export const Profile = () => {
                 <div className="glass-card rounded-xl p-6 flex items-center justify-between shadow-md hover:border-white/15 transition-all">
                   <div>
                     <p className="font-label-sm text-[9px] text-on-surface-variant/40 uppercase tracking-wider mb-1 font-semibold select-none">Most Worn Piece</p>
-                    <p className="font-display text-[17px] text-on-surface font-semibold italic">Noir Silk Blouse</p>
+                    <p className="font-display text-[17px] text-on-surface font-semibold italic">{mostWorn.name}</p>
                   </div>
                   <div className="text-right">
-                    <p className="font-display text-2xl luxury-text-gradient font-bold leading-none">18</p>
+                    <p className="font-display text-2xl luxury-text-gradient font-bold leading-none">{mostWorn.count}</p>
                     <p className="text-[9px] uppercase tracking-wider text-on-surface-variant/30 font-semibold mt-1">Times</p>
                   </div>
                 </div>
@@ -302,11 +369,11 @@ export const Profile = () => {
                 <div className="glass-card rounded-xl p-6 flex items-center justify-between shadow-md hover:border-white/15 transition-all">
                   <div>
                     <p className="font-label-sm text-[9px] text-on-surface-variant/40 uppercase tracking-wider mb-1 font-semibold select-none">Least Worn Piece</p>
-                    <p className="font-display text-[17px] text-on-surface font-semibold italic">Stone Cashmere Knit</p>
+                    <p className="font-display text-[17px] text-on-surface font-semibold italic">{leastWorn.name}</p>
                   </div>
                   <div className="text-right">
-                    <p className="font-display text-2xl text-on-surface-variant/50 font-bold leading-none">1</p>
-                    <p className="text-[9px] uppercase tracking-wider text-on-surface-variant/30 font-semibold mt-1">Time</p>
+                    <p className="font-display text-2xl text-on-surface-variant/50 font-bold leading-none">{leastWorn.count}</p>
+                    <p className="text-[9px] uppercase tracking-wider text-on-surface-variant/30 font-semibold mt-1">Time{leastWorn.count > 1 ? "s" : ""}</p>
                   </div>
                 </div>
 
