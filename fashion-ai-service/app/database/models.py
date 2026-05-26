@@ -511,4 +511,22 @@ class GeneratedOutfitItem(Base):
     clothing_item = relationship("ClothingItem", lazy="selectin")
 
 
+class RecreatedFit(Base):
+    """
+    SQLAlchemy model representing a logged outfit recreation attempt by a user.
+    """
+    __tablename__ = "recreated_fits"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    post_id = Column(UUID(as_uuid=True), ForeignKey("social_posts.id", ondelete="CASCADE"), nullable=False, index=True)
+    overall_match_percentage = Column(Numeric(5, 2), nullable=False)
+    details = Column(JSON, nullable=True)  # Stores slot breakdown matches
+    created_at = Column(DateTime(timezone=True), default=func.now())
+
+    # Relationships
+    post = relationship("SocialPost", lazy="selectin")
+    user = relationship("User", lazy="selectin")
+
+
 

@@ -46,15 +46,15 @@ export const MobileNav = () => {
         </Link>
       </div>
 
-      {/* Discover Link */}
+      {/* Social Link */}
       <Link
-        to="/app/recommendations"
+        to="/app/social/feed"
         className={`flex flex-col items-center gap-1 transition-all ${
-          isActive("/app/recommendations") ? "text-on-surface opacity-100" : "text-on-surface-variant opacity-60"
+          isActive("/app/social") ? "text-on-surface opacity-100" : "text-on-surface-variant opacity-60"
         }`}
       >
-        <span className="material-symbols-outlined text-[24px]">explore</span>
-        <span className="text-[9px] uppercase tracking-[0.1em] font-semibold">Discover</span>
+        <span className="material-symbols-outlined text-[24px]">groups</span>
+        <span className="text-[9px] uppercase tracking-[0.1em] font-semibold">Social</span>
       </Link>
 
       {/* Profile / Alex Link */}

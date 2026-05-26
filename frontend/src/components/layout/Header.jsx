@@ -16,6 +16,7 @@ export const Header = ({ title = "VOGUE.AI", showBack = false }) => {
     { label: "Dashboard", path: "/app" },
     { label: "Wardrobe", path: "/app/wardrobe" },
     { label: "Recommendations", path: "/app/recommendations" },
+    { label: "Social", path: "/app/social" },
     { label: "Stylist", path: "/app/chat" },
     { label: "Planner", path: "/app/planner" },
   ];

@@ -18,6 +18,12 @@ import OutfitDetails from "./pages/OutfitDetails";
 import CameraCapture from "./pages/CameraCapture";
 import ProcessingScan from "./pages/ProcessingScan";
 import VerifyItem from "./pages/VerifyItem";
+import SocialFeed from "./pages/SocialFeed";
+import SocialProfile from "./pages/SocialProfile";
+import CreatePost from "./pages/CreatePost";
+import Explore from "./pages/Explore";
+import Communities from "./pages/Communities";
+import RecreateFit from "./pages/RecreateFit";
 
 export const App = () => {
   return (
@@ -109,6 +115,143 @@ export const App = () => {
                   />
                 </Helmet>
                 <Planner />
+              </>
+            }
+          />
+
+          {/* Social Platform Expansion Routes */}
+          <Route
+            path="/app/social"
+            element={
+              <>
+                <Helmet>
+                  <title>Style Showroom | VOGUE.AI</title>
+                  <meta
+                    name="description"
+                    content="Discover, evaluate, and recreate curated outfit catalogs from the style network."
+                  />
+                </Helmet>
+                <SocialFeed />
+              </>
+            }
+          />
+          <Route
+            path="/app/social/feed"
+            element={
+              <>
+                <Helmet>
+                  <title>Style Showroom | VOGUE.AI</title>
+                  <meta
+                    name="description"
+                    content="Discover, evaluate, and recreate curated outfit catalogs from the style network."
+                  />
+                </Helmet>
+                <SocialFeed />
+              </>
+            }
+          />
+          <Route
+            path="/app/social/explore"
+            element={
+              <>
+                <Helmet>
+                  <title>Explore Trends | VOGUE.AI</title>
+                  <meta
+                    name="description"
+                    content="Search styling catalogs semantically with CLIP vector matching."
+                  />
+                </Helmet>
+                <Explore />
+              </>
+            }
+          />
+          <Route
+            path="/app/social/communities"
+            element={
+              <>
+                <Helmet>
+                  <title>Fashion Communities | VOGUE.AI</title>
+                  <meta
+                    name="description"
+                    content="Explore dedicated style sub-groups and tribal guidelines."
+                  />
+                </Helmet>
+                <Communities />
+              </>
+            }
+          />
+          <Route
+            path="/app/social/profile/:username"
+            element={
+              <>
+                <Helmet>
+                  <title>Stylist Profile | VOGUE.AI</title>
+                  <meta
+                    name="description"
+                    content="Browse customized digital closet items and style distribution indicators."
+                  />
+                </Helmet>
+                <SocialProfile />
+              </>
+            }
+          />
+          <Route
+            path="/app/social/profile"
+            element={
+              <>
+                <Helmet>
+                  <title>Stylist Profile | VOGUE.AI</title>
+                  <meta
+                    name="description"
+                    content="Browse customized digital closet items and style distribution indicators."
+                  />
+                </Helmet>
+                <SocialProfile />
+              </>
+            }
+          />
+          <Route
+            path="/app/social/post/new"
+            element={
+              <>
+                <Helmet>
+                  <title>Publish Outfit | VOGUE.AI</title>
+                  <meta
+                    name="description"
+                    content="Tag digitized closet garments directly on look photos with absolute hotspots."
+                  />
+                </Helmet>
+                <CreatePost />
+              </>
+            }
+          />
+          <Route
+            path="/app/social/recreate/:postId"
+            element={
+              <>
+                <Helmet>
+                  <title>Recreate Curation Engine | VOGUE.AI</title>
+                  <meta
+                    name="description"
+                    content="Evaluate compatibility and HSL color coordinate matches for outfit curations."
+                  />
+                </Helmet>
+                <RecreateFit />
+              </>
+            }
+          />
+          <Route
+            path="/app/social/recreate"
+            element={
+              <>
+                <Helmet>
+                  <title>Recreation History | VOGUE.AI</title>
+                  <meta
+                    name="description"
+                    content="Browse past capsule styling recreation attempts and metrics."
+                  />
+                </Helmet>
+                <RecreateFit />
               </>
             }
           />

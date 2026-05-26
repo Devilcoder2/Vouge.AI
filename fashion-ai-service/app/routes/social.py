@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.session import get_db
 from app.database.models import (
-    User, UserFollow, SocialPost, PostTaggedItem, PostLike, PostComment, PostSave, ClothingItem, ExternalProduct
+    User, UserFollow, SocialPost, PostTaggedItem, PostLike, PostComment, PostSave, ClothingItem, ExternalProduct, RecreatedFit
 )
 from app.routes.wardrobe import get_optional_current_user, map_clothing_item_to_response
 from app.schemas.social import (
@@ -506,6 +506,40 @@ async def recreate_creator_outfit(
     if total_slots > 0:
         overall_match = round((total_similarity / total_slots) * 100.0, 1)
 
+    # Database Logging of Recreation Event
+    try:
+        user_uuid = current_user.id if current_user else UUID("00000000-0000-0000-0000-000000000001")
+        details_dict = [
+            {
+                "role": s.role,
+                "tagged_item_id": str(s.tagged_item_id) if s.tagged_item_id else None,
+                "tagged_item_name": s.tagged_item_name,
+                "matched_item": {
+                    "id": str(s.matched_item.id) if s.matched_item.id else None,
+                    "name": s.matched_item.name,
+                    "textile": s.matched_item.textile,
+                    "primary_color": s.matched_item.primary_color
+                } if s.matched_item else None,
+                "similarity_score": float(s.similarity_score),
+                "match_status": s.match_status,
+                "buy_link": s.buy_link
+            }
+            for s in slots
+        ]
+        history_entry = RecreatedFit(
+            id=uuid4(),
+            user_id=user_uuid,
+            post_id=post_id,
+            overall_match_percentage=overall_match,
+            details=details_dict,
+            created_at=datetime.now(timezone.utc)
+        )
+        db.add(history_entry)
+        await db.commit()
+    except Exception as ex:
+        logger.error(f"Error logging recreated fit: {str(ex)}")
+        await db.rollback()
+
     return RecreateResponse(
         post_id=post_id,
         overall_match_percentage=overall_match,
@@ -513,6 +547,40 @@ async def recreate_creator_outfit(
         style_persona=post.style_persona,
         weather_context=post.weather_context
     )
+
+
+@router.get("/recreate/history")
+async def get_recreation_history(
+    db: AsyncSession = Depends(get_db),
+    current_user: Optional[User] = Depends(get_optional_current_user)
+):
+    """
+    Retrieves the active user's chronological outfit recreation log history.
+    """
+    actor_id = current_user.id if current_user else UUID("00000000-0000-0000-0000-000000000001")
+    stmt = select(RecreatedFit).where(RecreatedFit.user_id == actor_id).order_by(desc(RecreatedFit.created_at))
+    result = await db.execute(stmt)
+    history = result.scalars().all()
+    
+    serialized = []
+    for h in history:
+        # Fetch the original post details
+        post = h.post
+        creator = None
+        if post:
+            creator = await db.get(User, post.user_id)
+            
+        serialized.append({
+            "id": str(h.id),
+            "post_id": str(h.post_id),
+            "overall_match_percentage": float(h.overall_match_percentage),
+            "details": h.details,
+            "created_at": h.created_at.isoformat(),
+            "post_username": creator.username if creator else "anonymous",
+            "post_image_url": post.image_url if post else "",
+            "post_caption": post.caption if post else ""
+        })
+    return serialized
 
 
 @router.get("/explore", response_model=ExploreResponse)

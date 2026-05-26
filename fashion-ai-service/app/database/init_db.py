@@ -38,6 +38,7 @@ from app.database.models import (
     CommunityMember,
     GeneratedOutfit,
     GeneratedOutfitItem,
+    RecreatedFit,
 )
 
 
