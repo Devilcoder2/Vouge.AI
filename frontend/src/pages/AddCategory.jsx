@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import Layout from "../components/layout/Layout";
-import { addCategory } from "../utils/wardrobeStore";
+import { apiCreateCategory } from "../utils/wardrobeStore";
 
 // Beautiful, curated Quiet Luxury fashion images already present in project assets
 const CURATED_COVERS = [
@@ -60,7 +60,7 @@ export const AddCategory = () => {
     }
   };
 
-  const handleCreate = (e) => {
+  const handleCreate = async (e) => {
     e.preventDefault();
     if (!name.trim()) {
       setErrorMsg("Please enter a category name.");
@@ -70,27 +70,15 @@ export const AddCategory = () => {
     setIsSubmitting(true);
     setErrorMsg("");
 
-    // Create unique URL-safe slug ID
-    const id = name.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
-    
-    if (!id) {
-      setErrorMsg("Invalid category name.");
-      setIsSubmitting(false);
-      return;
-    }
+    try {
+      const payload = {
+        name: name.trim(),
+        subtitle: subtitle.trim() || "Collection",
+        image: image
+      };
 
-    const newCat = {
-      id,
-      name: name.trim(),
-      subtitle: subtitle.trim() || "Collection",
-      status: status,
-      image: image,
-      path: `/app/inventory/${id}`
-    };
-
-    const success = addCategory(newCat);
-    
-    if (success) {
+      const newCat = await apiCreateCategory(payload);
+      
       // Create success toast notification
       const toast = document.createElement("div");
       toast.className = "fixed bottom-36 left-1/2 -translate-x-1/2 bg-on-surface text-background px-6 py-3 rounded-full font-label-sm text-[11px] uppercase tracking-[0.2em] shadow-2xl z-[99] border border-white/10 animate-fade-in flex items-center gap-2";
@@ -106,8 +94,8 @@ export const AddCategory = () => {
       setTimeout(() => {
         navigate("/app/wardrobe");
       }, 800);
-    } else {
-      setErrorMsg("A category with this name already exists in your wardrobe.");
+    } catch (err) {
+      setErrorMsg(err.message || "A category with this name already exists in your wardrobe.");
       setIsSubmitting(false);
     }
   };

@@ -393,3 +393,142 @@ export const resetWardrobe = () => {
   localStorage.setItem(CATEGORIES_KEY, JSON.stringify(DEFAULT_CATEGORIES));
   return DEFAULT_ITEMS;
 };
+
+// ── BACKEND API INTEGRATIONS (WITH RESILIENT LOCALSTORAGE FALLBACKS) ───────────
+
+const API_BASE = "http://localhost:8000/api/wardrobe";
+
+export const apiListCategories = async (searchQuery = "") => {
+  try {
+    const url = `${API_BASE}/categories${searchQuery ? `?search=${encodeURIComponent(searchQuery)}` : ""}`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error("Backend responded with error code " + res.status);
+    const data = await res.json();
+    
+    // Auto-map backward compatibility path slugs
+    return data.map(cat => ({
+      ...cat,
+      path: cat.path || `/app/inventory/${cat.id}`
+    }));
+  } catch (err) {
+    console.warn("Backend categories API unavailable, using localStorage fallback:", err);
+    const localCats = getCategories();
+    if (!searchQuery) return localCats;
+    return localCats.filter(cat => 
+      cat.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+      cat.subtitle.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+  }
+};
+
+export const apiCreateCategory = async (payload) => {
+  try {
+    const res = await fetch(`${API_BASE}/categories`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(errData.detail || "Error creating category");
+    }
+    const data = await res.json();
+    return {
+      ...data,
+      path: data.path || `/app/inventory/${data.id}`
+    };
+  } catch (err) {
+    console.warn("Backend categories POST unavailable, saving to localStorage fallback:", err);
+    const newCatId = payload.name.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-");
+    const newCat = {
+      id: newCatId,
+      name: payload.name,
+      subtitle: payload.subtitle || "",
+      image: payload.image || "/assets/curation_collage_feature.png",
+      status: "active",
+      path: `/app/inventory/${newCatId}`
+    };
+    const success = addCategory(newCat);
+    if (!success) throw new Error("Category already exists");
+    return { ...newCat, count: 0 };
+  }
+};
+
+export const apiGetCategory = async (categoryId) => {
+  try {
+    const res = await fetch(`${API_BASE}/categories/${categoryId}`);
+    if (!res.ok) throw new Error("Category metadata not found on backend");
+    const catMeta = await res.json();
+
+    // Query matching items in this category from backend items list
+    const itemsRes = await fetch(`${API_BASE}/items?categoryId=${categoryId}&limit=100`);
+    let items = [];
+    if (itemsRes.ok) {
+      const itemsData = await itemsRes.json();
+      items = itemsData.data;
+    }
+    
+    return {
+      title: catMeta.name,
+      description: `${catMeta.subtitle || "Digital Archive"} Collection`,
+      items: items,
+      rawMeta: catMeta
+    };
+  } catch (err) {
+    console.warn(`Backend category fetch failed for ${categoryId}, using localStorage:`, err);
+    return getCategory(categoryId);
+  }
+};
+
+export const apiUpdateCategory = async (categoryId, payload) => {
+  try {
+    const res = await fetch(`${API_BASE}/categories/${categoryId}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(errData.detail || "Error updating category");
+    }
+    const data = await res.json();
+    return {
+      ...data,
+      path: data.path || `/app/inventory/${data.id}`
+    };
+  } catch (err) {
+    console.warn(`Backend category PUT failed for ${categoryId}, updating localStorage:`, err);
+    const localCategories = JSON.parse(localStorage.getItem(CATEGORIES_KEY) || "[]");
+    const index = localCategories.findIndex(c => c.id === categoryId);
+    if (index !== -1) {
+      localCategories[index] = { ...localCategories[index], ...payload };
+      localStorage.setItem(CATEGORIES_KEY, JSON.stringify(localCategories));
+      return { 
+        ...localCategories[index], 
+        count: 0,
+        path: `/app/inventory/${categoryId}`
+      };
+    }
+    throw new Error("Category not found in localStorage");
+  }
+};
+
+export const apiDeleteCategory = async (categoryId, cleanupMode = "keep_orphans") => {
+  try {
+    const res = await fetch(`${API_BASE}/categories/${categoryId}?cleanup=${cleanupMode}`, {
+      method: "DELETE"
+    });
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(errData.detail || "Error deleting category");
+    }
+    return true;
+  } catch (err) {
+    console.warn(`Backend category DELETE failed for ${categoryId}, deleting from localStorage:`, err);
+    const localCategories = JSON.parse(localStorage.getItem(CATEGORIES_KEY) || "[]");
+    const filtered = localCategories.filter(c => c.id !== categoryId);
+    localStorage.setItem(CATEGORIES_KEY, JSON.stringify(filtered));
+    return true;
+  }
+};
+

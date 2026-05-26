@@ -1,11 +1,42 @@
 import React, { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import Layout from "../components/layout/Layout";
-import { getCategories } from "../utils/wardrobeStore";
+import { 
+  apiListCategories, 
+  apiUpdateCategory, 
+  apiDeleteCategory 
+} from "../utils/wardrobeStore";
+
+// Beautiful, curated Quiet Luxury fashion images already present in project assets
+const CURATED_COVERS = [
+  { name: "Curation Collage", url: "/assets/curation_collage_feature.png" },
+  { name: "Textile Layout", url: "/assets/clothing_layout_gap.png" },
+  { name: "Stone Knitwear", url: "/assets/tops_category.png" },
+  { name: "Raw Denim Indigo", url: "/assets/bottoms_category.png" },
+  { name: "Charcoal Wool Trench", url: "/assets/outerwear_category.png" },
+  { name: "Polished calfskin Derby", url: "/assets/shoes_category.png" }
+];
 
 export const Wardrobe = () => {
-  const [searchQuery, setSearchQuery] = useState("");
   const navigate = useNavigate();
+  const [searchQuery, setSearchQuery] = useState("");
+  const [categories, setCategories] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  // Edit / Delete Modals & Dropdown States
+  const [activeDropdownId, setActiveDropdownId] = useState(null);
+  
+  // Edit Category Modal Form States
+  const [editingCategory, setEditingCategory] = useState(null);
+  const [editName, setEditName] = useState("");
+  const [editSubtitle, setEditSubtitle] = useState("");
+  const [editImage, setEditImage] = useState("");
+  const [editCustomImageUrl, setEditCustomImageUrl] = useState("");
+  
+  // Delete Category Modal Form States
+  const [deletingCategory, setDeletingCategory] = useState(null);
+  const [cleanupMode, setCleanupMode] = useState("keep_orphans");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Scroll reveal Intersection Observer on mount
   useEffect(() => {
@@ -30,23 +61,104 @@ export const Wardrobe = () => {
     };
   }, []);
 
-  const [categories, setCategories] = useState([]);
+  // Fetch categories asynchronously (handles search debouncing)
+  const loadCategories = async (query = "") => {
+    setIsLoading(true);
+    const data = await apiListCategories(query);
+    setCategories(data);
+    setIsLoading(false);
+  };
 
   useEffect(() => {
-    setCategories(getCategories());
+    const delayDebounceFn = setTimeout(() => {
+      loadCategories(searchQuery);
+    }, 250);
+
+    return () => clearTimeout(delayDebounceFn);
+  }, [searchQuery]);
+
+  // Close dropdown on click outside
+  useEffect(() => {
+    const handleOutsideClick = () => setActiveDropdownId(null);
+    window.addEventListener("click", handleOutsideClick);
+    return () => window.removeEventListener("click", handleOutsideClick);
   }, []);
 
-  const filteredCategories = categories.filter(
-    (cat) =>
-      cat.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      cat.subtitle.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const openEditModal = (cat, e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setActiveDropdownId(null);
+    setEditingCategory(cat);
+    setEditName(cat.name);
+    setEditSubtitle(cat.subtitle || "");
+    setEditImage(cat.image || "");
+    setEditCustomImageUrl(cat.image && cat.image.startsWith("http") ? cat.image : "");
+  };
+
+  const handleUpdateCategory = async (e) => {
+    e.preventDefault();
+    if (!editName.trim()) return;
+
+    setIsSubmitting(true);
+    try {
+      const finalImage = editCustomImageUrl.trim() ? editCustomImageUrl.trim() : editImage;
+      await apiUpdateCategory(editingCategory.id, {
+        name: editName.trim(),
+        subtitle: editSubtitle.trim(),
+        image: finalImage
+      });
+      
+      triggerToast(`Collection "${editName}" Updated`);
+      setEditingCategory(null);
+      loadCategories(searchQuery);
+    } catch (err) {
+      alert(err.message || "Failed to update category");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const openDeleteModal = (cat, e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setActiveDropdownId(null);
+    setDeletingCategory(cat);
+    setCleanupMode("keep_orphans");
+  };
+
+  const handleDeleteCategory = async () => {
+    setIsSubmitting(true);
+    try {
+      await apiDeleteCategory(deletingCategory.id, cleanupMode);
+      triggerToast(`Collection "${deletingCategory.name}" Deleted`);
+      setDeletingCategory(null);
+      loadCategories(searchQuery);
+    } catch (err) {
+      alert(err.message || "Failed to delete category");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const triggerToast = (msg) => {
+    const toast = document.createElement("div");
+    toast.className = "fixed bottom-36 left-1/2 -translate-x-1/2 bg-on-surface text-background px-6 py-3 rounded-full font-label-sm text-[11px] uppercase tracking-[0.2em] shadow-2xl z-[120] border border-white/10 animate-fade-in flex items-center gap-2";
+    toast.innerHTML = `<span class="material-symbols-outlined text-sm font-bold text-tertiary">check_circle</span> ${msg}`;
+    document.body.appendChild(toast);
+    
+    setTimeout(() => {
+      toast.classList.add("animate-fade-out");
+      setTimeout(() => toast.remove(), 400);
+    }, 2000);
+  };
 
   return (
     <Layout>
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-gutter relative">
+        
         {/* Content Area */}
         <div className="lg:col-span-8 xl:col-span-9 space-y-12">
+          
           {/* Enhanced Search Bar */}
           <section className="relative hero-reveal" style={{ animationDelay: "0.1s" }}>
             <div className="flex flex-col md:flex-row gap-4 items-center">
@@ -127,44 +239,92 @@ export const Wardrobe = () => {
               </div>
             </div>
 
-            {filteredCategories.length > 0 ? (
+            {isLoading ? (
+              <div className="flex flex-col items-center justify-center py-20 select-none">
+                <div className="w-10 h-10 border-2 border-tertiary/20 border-t-tertiary rounded-full animate-spin mb-4"></div>
+                <p className="font-label-sm text-[10px] uppercase tracking-widest text-on-surface-variant/50">
+                  Retrieving Wardrobe Vault...
+                </p>
+              </div>
+            ) : categories.length > 0 ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-8">
-                {filteredCategories.map((cat) => (
-                  <Link
-                    key={cat.id}
-                    to={cat.path}
-                    className="category-card group relative aspect-[4/5] rounded-2xl overflow-hidden glass-panel flex flex-col justify-end p-8 hover:border-white/20 transition-all duration-700 shadow-2xl hover:scale-[1.01]"
-                  >
-                    <img
-                      alt={cat.name}
-                      className="category-image absolute inset-0 w-full h-full object-cover opacity-50 grayscale-[0.2] transition-all duration-1000 ease-out"
-                      src={cat.image}
-                    />
-                    <div className="absolute inset-0 bg-gradient-to-t from-background via-background/60 to-transparent"></div>
-                    <div className="relative z-10 space-y-2">
-                      <span className="font-label-sm text-[9px] text-tertiary/70 uppercase tracking-[0.3em] block font-bold">
-                        {cat.subtitle}
-                      </span>
-                      <h3 className="font-display text-3xl luxury-text-gradient italic">
-                        {cat.name}
-                      </h3>
-                      <div className="flex items-center gap-3 pt-4 border-t border-white/5 mt-4">
-                        <span className="font-body-md text-xs text-on-surface-variant/50">
-                          {cat.count} Items
-                        </span>
-                        <span className="w-1 h-1 rounded-full bg-white/10"></span>
-                        <span className="font-label-sm text-[8px] text-on-surface-variant/40 uppercase tracking-widest font-semibold">
-                          {cat.status}
-                        </span>
-                      </div>
+                {categories.map((cat) => (
+                  <div key={cat.id} className="relative group aspect-[4/5] rounded-2xl overflow-hidden shadow-2xl hover:scale-[1.01] transition-all duration-500 border border-white/5 hover:border-white/15">
+                    
+                    {/* Category Action Dropdown Trigger (Isolated from card navigation) */}
+                    <div className="absolute top-4 right-4 z-20">
+                      <button
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setActiveDropdownId(activeDropdownId === cat.id ? null : cat.id);
+                        }}
+                        className="w-8 h-8 rounded-full bg-[#1A1A1A]/60 backdrop-blur-xl border border-white/10 text-on-surface hover:text-tertiary flex items-center justify-center transition-all cursor-pointer hover:scale-105 active:scale-95 shadow-lg"
+                        title="Actions"
+                      >
+                        <span className="material-symbols-outlined text-[18px]">more_vert</span>
+                      </button>
+
+                      {/* Dropdown Options Box */}
+                      {activeDropdownId === cat.id && (
+                        <div 
+                          onClick={(e) => e.stopPropagation()} 
+                          className="absolute top-9 right-0 w-36 glass-panel rounded-lg shadow-2xl py-1.5 z-30 animate-fade-in border border-white/10 select-none"
+                        >
+                          <button
+                            onClick={(e) => openEditModal(cat, e)}
+                            className="w-full text-left px-4 py-2.5 text-[10px] uppercase tracking-wider text-on-surface-variant hover:text-on-surface hover:bg-white/5 transition-all flex items-center gap-2 font-bold cursor-pointer"
+                          >
+                            <span className="material-symbols-outlined text-sm">edit</span>
+                            Edit Meta
+                          </button>
+                          <button
+                            onClick={(e) => openDeleteModal(cat, e)}
+                            className="w-full text-left px-4 py-2.5 text-[10px] uppercase tracking-wider text-error/80 hover:text-error hover:bg-error/5 transition-all flex items-center gap-2 font-bold cursor-pointer"
+                          >
+                            <span className="material-symbols-outlined text-sm text-error/80">delete</span>
+                            Remove
+                          </button>
+                        </div>
+                      )}
                     </div>
-                  </Link>
+
+                    {/* Standard Category Link Card */}
+                    <Link
+                      to={cat.path || `/app/inventory/${cat.id}`}
+                      className="absolute inset-0 flex flex-col justify-end p-8"
+                    >
+                      <img
+                        alt={cat.name}
+                        className="category-image absolute inset-0 w-full h-full object-cover opacity-50 grayscale-[0.2] transition-all duration-1000 ease-out group-hover:scale-103"
+                        src={cat.image || "/assets/curation_collage_feature.png"}
+                      />
+                      <div className="absolute inset-0 bg-gradient-to-t from-background via-background/60 to-transparent"></div>
+                      <div className="relative z-10 space-y-2 select-none">
+                        <span className="font-label-sm text-[9px] text-tertiary/70 uppercase tracking-[0.3em] block font-bold">
+                          {cat.subtitle || "Collection"}
+                        </span>
+                        <h3 className="font-display text-3xl luxury-text-gradient italic">
+                          {cat.name}
+                        </h3>
+                        <div className="flex items-center gap-3 pt-4 border-t border-white/5 mt-4">
+                          <span className="font-body-md text-xs text-on-surface-variant/50">
+                            {cat.count} Item{cat.count !== 1 ? "s" : ""}
+                          </span>
+                          <span className="w-1 h-1 rounded-full bg-white/10"></span>
+                          <span className="font-label-sm text-[8px] text-on-surface-variant/40 uppercase tracking-widest font-semibold">
+                            {cat.status || "Active"}
+                          </span>
+                        </div>
+                      </div>
+                    </Link>
+                  </div>
                 ))}
 
                 {/* Add New Category Card */}
                 <button 
                   onClick={() => navigate("/app/category/new")}
-                  className="group relative aspect-[4/5] rounded-2xl overflow-hidden glass-panel flex flex-col items-center justify-center border-dashed border border-white/10 hover:border-white/20 hover:bg-white/[0.02] transition-all duration-500 cursor-pointer shadow-xl"
+                  className="group relative aspect-[4/5] rounded-2xl overflow-hidden glass-panel flex flex-col items-center justify-center border-dashed border border-white/10 hover:border-white/20 hover:bg-white/[0.02] transition-all duration-500 cursor-pointer shadow-xl select-none"
                 >
                   <div className="w-14 h-14 rounded-full glass-panel bg-white/5 flex items-center justify-center mb-4 group-hover:bg-tertiary group-hover:text-on-tertiary transition-all duration-300 shadow-inner">
                     <span className="material-symbols-outlined text-2xl">add</span>
@@ -175,8 +335,8 @@ export const Wardrobe = () => {
                 </button>
               </div>
             ) : (
-              <div className="text-center py-16 glass-panel rounded-2xl shadow-xl">
-                <span className="material-symbols-outlined text-5xl opacity-40 mb-3 text-tertiary">
+              <div className="text-center py-16 glass-panel rounded-2xl shadow-xl select-none">
+                <span className="material-symbols-outlined text-5xl opacity-40 mb-3 text-tertiary animate-bounce">
                   checkroom
                 </span>
                 <p className="font-body-md text-sm text-on-surface-variant">
@@ -189,6 +349,7 @@ export const Wardrobe = () => {
 
         {/* Refined Sidebar */}
         <aside className="hidden lg:flex lg:col-span-4 xl:col-span-3 flex-col gap-gutter reveal">
+          
           {/* Stats Card */}
           <div className="glass-panel rounded-2xl p-8 ai-glow shadow-xl">
             <h3 className="font-display text-xl italic luxury-text-gradient mb-8 select-none">
@@ -242,6 +403,7 @@ export const Wardrobe = () => {
             </h3>
             
             <div className="space-y-6 flex-grow overflow-y-auto no-scrollbar max-h-[350px]">
+              
               {/* Blouse */}
               <div 
                 onClick={() => navigate("/app/item/tops/blouse")}
@@ -255,7 +417,7 @@ export const Wardrobe = () => {
                   />
                 </div>
                 <div>
-                  <h4 className="font-body text-xs text-on-surface-variant/80 group-hover:text-on-surface transition-colors font-medium">
+                  <h4 className="font-body text-xs text-on-surface-variant/80 group-hover:text-on-surface transition-colors font-medium font-light">
                     Noir Silk Blouse
                   </h4>
                   <p className="font-label-sm text-[8px] text-on-surface-variant/30 uppercase mt-1.5 tracking-widest font-semibold">
@@ -277,7 +439,7 @@ export const Wardrobe = () => {
                   />
                 </div>
                 <div>
-                  <h4 className="font-body text-xs text-on-surface-variant/80 group-hover:text-on-surface transition-colors font-medium">
+                  <h4 className="font-body text-xs text-on-surface-variant/80 group-hover:text-on-surface transition-colors font-medium font-light">
                     Essential Sneakers
                   </h4>
                   <p className="font-label-sm text-[8px] text-on-surface-variant/30 uppercase mt-1.5 tracking-widest font-semibold">
@@ -321,6 +483,199 @@ export const Wardrobe = () => {
       >
         <span className="material-symbols-outlined text-2xl font-bold">add</span>
       </button>
+
+      {/* ==================== EDIT CATEGORY MODAL ==================== */}
+      {editingCategory && (
+        <div className="fixed inset-0 bg-background/80 backdrop-blur-md z-[100] flex items-center justify-center p-4 animate-fade-in">
+          <div className="glass-panel w-full max-w-lg rounded-2xl p-8 border border-white/10 shadow-2xl space-y-6 select-none animate-scale-up">
+            <div className="flex justify-between items-center pb-4 border-b border-white/5">
+              <h3 className="font-display text-2xl italic luxury-text-gradient">Edit Collection</h3>
+              <button
+                onClick={() => setEditingCategory(null)}
+                className="text-on-surface-variant hover:text-on-surface transition-colors cursor-pointer"
+              >
+                <span className="material-symbols-outlined">close</span>
+              </button>
+            </div>
+
+            <form onSubmit={handleUpdateCategory} className="space-y-6">
+              <div className="space-y-2">
+                <label className="block text-[10px] font-label-sm uppercase tracking-wider text-on-surface-variant">
+                  Collection Name
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                  className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-on-surface font-body-md focus:outline-none focus:border-tertiary transition-all"
+                  placeholder="e.g. Resortwear"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="block text-[10px] font-label-sm uppercase tracking-wider text-on-surface-variant">
+                  Subtitle Classification
+                </label>
+                <input
+                  type="text"
+                  value={editSubtitle}
+                  onChange={(e) => setEditSubtitle(e.target.value)}
+                  className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-on-surface font-body-md focus:outline-none focus:border-tertiary transition-all"
+                  placeholder="e.g. Tailored Luxury"
+                />
+              </div>
+
+              {/* Cover Image Curator */}
+              <div className="space-y-3">
+                <label className="block text-[10px] font-label-sm uppercase tracking-wider text-on-surface-variant">
+                  Curated Cover Selection
+                </label>
+                <div className="grid grid-cols-6 gap-2">
+                  {CURATED_COVERS.map((cover, idx) => (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() => {
+                        setEditImage(cover.url);
+                        setEditCustomImageUrl("");
+                      }}
+                      className={`relative aspect-[3/4] rounded-lg overflow-hidden border transition-all cursor-pointer ${
+                        editImage === cover.url && !editCustomImageUrl
+                          ? "border-tertiary scale-95 ring-2 ring-tertiary/20"
+                          : "border-white/5 opacity-60 hover:opacity-100"
+                      }`}
+                    >
+                      <img src={cover.url} alt={cover.name} className="w-full h-full object-cover" />
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="block text-[10px] font-label-sm uppercase tracking-wider text-on-surface-variant">
+                  Or Custom Image URL
+                </label>
+                <input
+                  type="url"
+                  value={editCustomImageUrl}
+                  onChange={(e) => {
+                    setEditCustomImageUrl(e.target.value);
+                    if (e.target.value.trim()) setEditImage(e.target.value.trim());
+                  }}
+                  className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-on-surface font-body-md focus:outline-none focus:border-tertiary transition-all"
+                  placeholder="https://images.unsplash.com/..."
+                />
+              </div>
+
+              <div className="flex gap-4 pt-4 border-t border-white/5">
+                <button
+                  type="button"
+                  onClick={() => setEditingCategory(null)}
+                  className="flex-1 py-3.5 border border-white/10 rounded-lg font-label-sm text-[10px] uppercase tracking-widest text-on-surface hover:bg-white/5 transition-all font-bold cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="flex-1 py-3.5 bg-white text-background rounded-lg font-label-sm text-[10px] uppercase tracking-widest hover:bg-tertiary hover:text-on-tertiary transition-all font-bold cursor-pointer disabled:opacity-50"
+                >
+                  {isSubmitting ? "Updating..." : "Save Changes"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ==================== DELETE CATEGORY MODAL ==================== */}
+      {deletingCategory && (
+        <div className="fixed inset-0 bg-background/80 backdrop-blur-md z-[100] flex items-center justify-center p-4 animate-fade-in">
+          <div className="glass-panel w-full max-w-md rounded-2xl p-8 border border-white/10 shadow-2xl space-y-6 select-none animate-scale-up">
+            <div className="flex justify-between items-center pb-4 border-b border-white/5">
+              <h3 className="font-display text-2xl italic text-error">Delete Collection</h3>
+              <button
+                onClick={() => setDeletingCategory(null)}
+                className="text-on-surface-variant hover:text-on-surface transition-colors cursor-pointer"
+              >
+                <span className="material-symbols-outlined">close</span>
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <p className="font-body-md text-xs text-on-surface-variant leading-relaxed">
+                Are you sure you want to permanently delete the collection <span className="text-on-surface font-semibold">"{deletingCategory.name}"</span>?
+              </p>
+              
+              <div className="space-y-2 pt-2">
+                <label className="block text-[10px] font-label-sm uppercase tracking-wider text-on-surface-variant font-bold">
+                  Orphaned Items Cleanup Mode
+                </label>
+                <div className="space-y-3 bg-white/5 border border-white/5 rounded-xl p-4">
+                  <label className="flex items-start gap-3 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="cleanupMode"
+                      value="keep_orphans"
+                      checked={cleanupMode === "keep_orphans"}
+                      onChange={(e) => setCleanupMode(e.target.value)}
+                      className="mt-0.5 text-tertiary focus:ring-0 bg-transparent border-white/20"
+                    />
+                    <div>
+                      <p className="text-[11px] font-label-sm uppercase tracking-wider text-on-surface font-semibold">
+                        Keep Items (Recommended)
+                      </p>
+                      <p className="text-[10px] text-on-surface-variant/60 leading-relaxed font-light">
+                        Removes the collection container tag but keeps all the wardrobe pieces intact in other collections.
+                      </p>
+                    </div>
+                  </label>
+
+                  <div className="h-[1px] bg-white/5"></div>
+
+                  <label className="flex items-start gap-3 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="cleanupMode"
+                      value="delete_items"
+                      checked={cleanupMode === "delete_items"}
+                      onChange={(e) => setCleanupMode(e.target.value)}
+                      className="mt-0.5 text-error focus:ring-0 bg-transparent border-white/20"
+                    />
+                    <div>
+                      <p className="text-[11px] font-label-sm uppercase tracking-wider text-error font-semibold">
+                        Delete Contained Items
+                      </p>
+                      <p className="text-[10px] text-on-surface-variant/60 leading-relaxed font-light">
+                        Deletes the collection and permanently purges all the individual wardrobe items contained within.
+                      </p>
+                    </div>
+                  </label>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex gap-4 pt-4 border-t border-white/5">
+              <button
+                type="button"
+                onClick={() => setDeletingCategory(null)}
+                className="flex-1 py-3.5 border border-white/10 rounded-lg font-label-sm text-[10px] uppercase tracking-widest text-on-surface hover:bg-white/5 transition-all font-bold cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDeleteCategory}
+                disabled={isSubmitting}
+                className="flex-1 py-3.5 bg-error text-white rounded-lg font-label-sm text-[10px] uppercase tracking-widest hover:bg-red-700 transition-all font-bold cursor-pointer disabled:opacity-50"
+              >
+                {isSubmitting ? "Deleting..." : "Confirm Delete"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </Layout>
   );
 };
