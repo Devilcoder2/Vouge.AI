@@ -26,6 +26,14 @@ from app.database.models import (
     # Phase 3B — Digital Wardrobe REST API
     WardrobeCategory,
     WardrobeHistory,
+    # Social Models
+    UserFollow,
+    SocialPost,
+    ExternalProduct,
+    PostTaggedItem,
+    PostLike,
+    PostComment,
+    PostSave,
 )
 
 async def init_models():
@@ -57,6 +65,26 @@ async def init_models():
             ))
             await conn.execute(text(
                 "ALTER TABLE saved_outfits ADD COLUMN IF NOT EXISTS preview_url VARCHAR;"
+            ))
+
+            # Safe online migrations for user social attributes
+            await conn.execute(text(
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS vanity_username VARCHAR(50) UNIQUE;"
+            ))
+            await conn.execute(text(
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS bio TEXT;"
+            ))
+            await conn.execute(text(
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url VARCHAR;"
+            ))
+            await conn.execute(text(
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS verified_badge BOOLEAN DEFAULT FALSE;"
+            ))
+            await conn.execute(text(
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS favorite_brands VARCHAR[] DEFAULT '{}';"
+            ))
+            await conn.execute(text(
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS wardrobe_visibility VARCHAR(20) DEFAULT 'public';"
             ))
 
             # Phase 3B attribute extensions on clothing_items

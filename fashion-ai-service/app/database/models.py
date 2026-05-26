@@ -143,6 +143,14 @@ class User(Base):
     username = Column(String(50), unique=True, nullable=False, index=True)
     hashed_password = Column(String, nullable=False)
 
+    # Social details
+    vanity_username = Column(String(50), unique=True, nullable=True, index=True)
+    bio = Column(Text, nullable=True)
+    avatar_url = Column(String, nullable=True)
+    verified_badge = Column(Boolean, default=False)
+    favorite_brands = Column(ARRAY(String), nullable=False, default=list)
+    wardrobe_visibility = Column(String(20), nullable=False, default="public")
+
     # Personal details
     first_name = Column(String(100), nullable=True)
     last_name = Column(String(100), nullable=True)
@@ -171,6 +179,9 @@ class User(Base):
     sessions = relationship("UserSession", back_populates="user", cascade="all, delete-orphan")
     style_profile = relationship("UserStyleProfile", back_populates="user", cascade="all, delete-orphan", uselist=False)
     background_jobs = relationship("BackgroundJob", back_populates="user", cascade="all, delete-orphan")
+    
+    # Social relationships
+    posts = relationship("SocialPost", back_populates="user", cascade="all, delete-orphan")
 
 
 class RefreshToken(Base):
@@ -300,4 +311,124 @@ class WardrobeHistory(Base):
     user_id = Column(String, nullable=False, index=True)
     item_id = Column(UUID(as_uuid=True), ForeignKey("clothing_items.id", ondelete="CASCADE"), nullable=False)
     viewed_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now())
+
+
+class UserFollow(Base):
+    """
+    Association model representing follower/following relationships.
+    """
+    __tablename__ = "user_follows"
+
+    follower_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    following_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    created_at = Column(DateTime(timezone=True), default=func.now())
+
+
+class SocialPost(Base):
+    """
+    SQLAlchemy model representing an outfit social post.
+    """
+    __tablename__ = "social_posts"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    image_url = Column(String, nullable=False)
+    caption = Column(Text, nullable=True)
+    weather_context = Column(String(50), nullable=True)
+    occasion_tag = Column(String(50), nullable=True)
+    style_persona = Column(String(50), nullable=True)
+    created_at = Column(DateTime(timezone=True), default=func.now())
+    updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now())
+
+    # Relationships
+    user = relationship("User", back_populates="posts")
+    tagged_items = relationship("PostTaggedItem", back_populates="post", cascade="all, delete-orphan", lazy="selectin")
+    likes = relationship("PostLike", back_populates="post", cascade="all, delete-orphan")
+    comments = relationship("PostComment", back_populates="post", cascade="all, delete-orphan", lazy="selectin")
+    saves = relationship("PostSave", back_populates="post", cascade="all, delete-orphan")
+
+
+class ExternalProduct(Base):
+    """
+    SQLAlchemy model representing scraped affiliate products from external brands.
+    """
+    __tablename__ = "external_products"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    source = Column(String(100), nullable=False)
+    source_id = Column(String(255), nullable=False)
+    title = Column(String(255), nullable=False)
+    brand = Column(String(100), nullable=True)
+    image_url = Column(Text, nullable=False)
+    price = Column(Numeric(10, 2), nullable=False)
+    currency = Column(String(10), nullable=False, default="INR")
+    url = Column(Text, nullable=False)
+    scraped_at = Column(DateTime(timezone=True), default=func.now())
+
+
+class PostTaggedItem(Base):
+    """
+    SQLAlchemy model representing interactive item hotspots tagged in social posts.
+    """
+    __tablename__ = "post_tagged_items"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    post_id = Column(UUID(as_uuid=True), ForeignKey("social_posts.id", ondelete="CASCADE"), nullable=False, index=True)
+    
+    # Points to either a digitized wardrobe item or an external affiliate item
+    wardrobe_item_id = Column(UUID(as_uuid=True), ForeignKey("clothing_items.id", ondelete="SET NULL"), nullable=True)
+    external_product_id = Column(UUID(as_uuid=True), ForeignKey("external_products.id", ondelete="SET NULL"), nullable=True)
+    
+    x_coord = Column(Numeric(5, 2), nullable=False)
+    y_coord = Column(Numeric(5, 2), nullable=False)
+    created_at = Column(DateTime(timezone=True), default=func.now())
+
+    # Relationships
+    post = relationship("SocialPost", back_populates="tagged_items")
+    wardrobe_item = relationship("ClothingItem", lazy="selectin")
+
+
+class PostLike(Base):
+    """
+    Association model representing social likes.
+    """
+    __tablename__ = "post_likes"
+
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    post_id = Column(UUID(as_uuid=True), ForeignKey("social_posts.id", ondelete="CASCADE"), primary_key=True)
+    created_at = Column(DateTime(timezone=True), default=func.now())
+
+    post = relationship("SocialPost", back_populates="likes")
+
+
+class PostComment(Base):
+    """
+    SQLAlchemy model representing comments on social posts.
+    Supports nested threads using self-referencing hierarchy.
+    """
+    __tablename__ = "post_comments"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    post_id = Column(UUID(as_uuid=True), ForeignKey("social_posts.id", ondelete="CASCADE"), nullable=False, index=True)
+    parent_comment_id = Column(UUID(as_uuid=True), ForeignKey("post_comments.id", ondelete="CASCADE"), nullable=True)
+    content = Column(Text, nullable=False)
+    created_at = Column(DateTime(timezone=True), default=func.now())
+
+    # Relationships
+    post = relationship("SocialPost", back_populates="comments")
+    user = relationship("User", lazy="selectin")
+
+
+class PostSave(Base):
+    """
+    Association model representing saved posts.
+    """
+    __tablename__ = "post_saves"
+
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    post_id = Column(UUID(as_uuid=True), ForeignKey("social_posts.id", ondelete="CASCADE"), primary_key=True)
+    created_at = Column(DateTime(timezone=True), default=func.now())
+
+    post = relationship("SocialPost", back_populates="saves")
 
