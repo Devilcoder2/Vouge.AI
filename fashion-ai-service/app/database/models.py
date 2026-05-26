@@ -55,6 +55,16 @@ class ClothingItem(Base):
     # Path to saved local float32 numpy vector array (.npy file)
     embedding_path = Column(String, nullable=False)
     
+    # Frontend wardrobe attribute extensions
+    name = Column(String, nullable=True)
+    textile = Column(String, nullable=True)
+    more_details = Column(Text, nullable=True)
+    occasion = Column(String, nullable=True)  # casual, work, evening, event
+    verified = Column(Boolean, default=False)
+    long = Column(Boolean, default=False)
+    has_ai_service = Column(Boolean, default=False)
+    categories = Column(ARRAY(String), nullable=True)  # Many-to-Many categories array (strings)
+    
     created_at = Column(DateTime(timezone=True), default=func.now())
 
 class SavedOutfit(Base):
@@ -262,3 +272,32 @@ class BackgroundJob(Base):
 
     # Relationship back to User
     user = relationship("User", back_populates="background_jobs")
+
+
+# ── Phase 3B: Digital Wardrobe REST API ──────────────────────────────────────
+
+class WardrobeCategory(Base):
+    """
+    SQLAlchemy model representing a custom wardrobe collection/category.
+    """
+    __tablename__ = "wardrobe_categories"
+
+    id = Column(String, primary_key=True)  # URL-friendly slug, e.g. "tops", "evening-wear"
+    name = Column(String, nullable=False, unique=True)
+    subtitle = Column(String, nullable=True)
+    image = Column(String, nullable=True)
+    status = Column(String, nullable=True)  # e.g., active, archived
+    created_at = Column(DateTime(timezone=True), default=func.now())
+
+
+class WardrobeHistory(Base):
+    """
+    SQLAlchemy model tracking recently viewed wardrobe items.
+    """
+    __tablename__ = "wardrobe_history"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(String, nullable=False, index=True)
+    item_id = Column(UUID(as_uuid=True), ForeignKey("clothing_items.id", ondelete="CASCADE"), nullable=False)
+    viewed_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now())
+

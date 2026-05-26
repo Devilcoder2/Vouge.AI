@@ -23,6 +23,9 @@ from app.database.models import (
     UserBehaviorEvent,
     UserStyleProfile,
     BackgroundJob,
+    # Phase 3B — Digital Wardrobe REST API
+    WardrobeCategory,
+    WardrobeHistory,
 )
 
 async def init_models():
@@ -56,7 +59,44 @@ async def init_models():
                 "ALTER TABLE saved_outfits ADD COLUMN IF NOT EXISTS preview_url VARCHAR;"
             ))
 
-        print("✓ PostgreSQL tables successfully initialized.")
+            # Phase 3B attribute extensions on clothing_items
+            await conn.execute(text(
+                "ALTER TABLE clothing_items ADD COLUMN IF NOT EXISTS name VARCHAR;"
+            ))
+            await conn.execute(text(
+                "ALTER TABLE clothing_items ADD COLUMN IF NOT EXISTS textile VARCHAR;"
+            ))
+            await conn.execute(text(
+                "ALTER TABLE clothing_items ADD COLUMN IF NOT EXISTS more_details TEXT;"
+            ))
+            await conn.execute(text(
+                "ALTER TABLE clothing_items ADD COLUMN IF NOT EXISTS occasion VARCHAR;"
+            ))
+            await conn.execute(text(
+                "ALTER TABLE clothing_items ADD COLUMN IF NOT EXISTS verified BOOLEAN DEFAULT FALSE;"
+            ))
+            await conn.execute(text(
+                "ALTER TABLE clothing_items ADD COLUMN IF NOT EXISTS long BOOLEAN DEFAULT FALSE;"
+            ))
+            await conn.execute(text(
+                "ALTER TABLE clothing_items ADD COLUMN IF NOT EXISTS has_ai_service BOOLEAN DEFAULT FALSE;"
+            ))
+            await conn.execute(text(
+                "ALTER TABLE clothing_items ADD COLUMN IF NOT EXISTS categories VARCHAR[];"
+            ))
+
+            # Seed default categories
+            await conn.execute(text("""
+                INSERT INTO wardrobe_categories (id, name, subtitle, status) VALUES
+                ('tops', 'Tops', 'Shirts, t-shirts, knits, and blouses', 'active'),
+                ('bottoms', 'Bottoms', 'Pants, jeans, shorts, and skirts', 'active'),
+                ('footwear', 'Footwear', 'Shoes, boots, sneakers, and sandals', 'active'),
+                ('outerwear', 'Outerwear', 'Coats, jackets, parkas, and blazers', 'active'),
+                ('accessories', 'Accessories', 'Bags, belts, hats, and jewelry', 'active')
+                ON CONFLICT (id) DO NOTHING;
+            """))
+
+        print("✓ PostgreSQL tables successfully initialized and seeded.")
         print("  Tables managed:")
         for table in Base.metadata.sorted_tables:
             print(f"    • {table.name}")
@@ -67,3 +107,4 @@ async def init_models():
 
 if __name__ == "__main__":
     asyncio.run(init_models())
+

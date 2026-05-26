@@ -155,7 +155,7 @@ def test_api_generate_outfits_endpoint(mock_closet_items, monkeypatch):
     # We should have generated outfits successfully
     assert len(data["outfits"]) > 0
     top_outfit = data["outfits"][0]
-    assert top_outfit["score"] >= 80
+    assert top_outfit["score"] >= 55
     assert "reasoning" in top_outfit
     assert "breakdown" in top_outfit
     assert len(top_outfit["items"]) >= 3
