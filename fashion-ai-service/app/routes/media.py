@@ -154,7 +154,12 @@ async def serve_local_file(folder: str, filename: str):
     Used under local fallback operations.
     """
     clean_folder = folder.strip("/").lower()
-    local_path = settings.UPLOAD_DIR / clean_folder / filename
+    if clean_folder == "processed":
+        local_path = settings.PROCESSED_DIR / filename
+    elif clean_folder == "previews":
+        local_path = settings.PREVIEWS_DIR / filename
+    else:
+        local_path = settings.UPLOAD_DIR / clean_folder / filename
     
     if not local_path.exists() or not local_path.is_file():
         raise HTTPException(

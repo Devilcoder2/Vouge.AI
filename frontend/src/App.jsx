@@ -15,6 +15,9 @@ import AddCategory from "./pages/AddCategory";
 import Profile from "./pages/Profile";
 import Suggestions from "./pages/Suggestions";
 import OutfitDetails from "./pages/OutfitDetails";
+import CameraCapture from "./pages/CameraCapture";
+import ProcessingScan from "./pages/ProcessingScan";
+import VerifyItem from "./pages/VerifyItem";
 
 export const App = () => {
   return (
@@ -196,15 +199,36 @@ export const App = () => {
           />
           <Route
             path="/app/camera"
-            element={<GenericScreen title="Camera Capture" />}
+            element={
+              <>
+                <Helmet>
+                  <title>Garment Camera Viewfinder | VOGUE.AI</title>
+                </Helmet>
+                <CameraCapture />
+              </>
+            }
           />
           <Route
             path="/app/processing"
-            element={<GenericScreen title="Processing Scan" />}
+            element={
+              <>
+                <Helmet>
+                  <title>AI Image Analysis Processing | VOGUE.AI</title>
+                </Helmet>
+                <ProcessingScan />
+              </>
+            }
           />
           <Route
             path="/app/verify"
-            element={<GenericScreen title="Verify Item" />}
+            element={
+              <>
+                <Helmet>
+                  <title>Confirm AI Specifications | VOGUE.AI</title>
+                </Helmet>
+                <VerifyItem />
+              </>
+            }
           />
           <Route
             path="/app/outfit/:outfitId"

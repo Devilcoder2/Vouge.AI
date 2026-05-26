@@ -199,7 +199,7 @@ export const InventoryCategory = () => {
         <section className="relative hero-reveal space-y-4" style={{ animationDelay: "0.1s" }}>
           <div className="flex flex-col md:flex-row gap-4 items-stretch md:items-center">
             {/* Search Input Box */}
-            <div className="relative flex-grow w-full glass-panel rounded-xl overflow-hidden flex items-center px-6 py-4 focus-within:ring-1 focus-within:ring-white/20 transition-all shadow-lg">
+            <div className="relative flex-grow w-full h-14 glass-panel rounded-xl overflow-hidden flex items-center px-6 focus-within:ring-1 focus-within:ring-white/20 transition-all shadow-lg">
               <span className="material-symbols-outlined text-outline mr-4 select-none">search</span>
               <input
                 className="bg-transparent border-none w-full text-on-surface font-body-md text-body-md focus:ring-0 focus:outline-none placeholder:text-outline-variant/50"
@@ -221,14 +221,14 @@ export const InventoryCategory = () => {
             </div>
 
             {/* Sort & Order Dropdowns inside a unified Glass Panel */}
-            <div className="flex flex-wrap items-center gap-3 glass-panel rounded-xl px-4 py-3 shadow-lg select-none">
+            <div className="flex items-center gap-3 h-14 glass-panel rounded-xl px-5 shadow-lg select-none whitespace-nowrap">
               <div className="flex items-center gap-2">
                 <span className="material-symbols-outlined text-on-surface-variant/55 text-lg">sort</span>
                 <span className="font-label-sm text-[9px] uppercase tracking-wider text-on-surface-variant font-semibold">Sort By</span>
                 <select
                   value={sortBy}
                   onChange={(e) => setSortBy(e.target.value)}
-                  className="bg-background/45 border-0 rounded px-2.5 py-1 text-[11px] font-label-sm text-on-surface focus:ring-1 focus:ring-white/10 cursor-pointer uppercase tracking-wider font-semibold focus:outline-none"
+                  className="bg-background/45 border border-white/10 rounded px-2.5 py-1 text-[11px] font-label-sm text-on-surface focus:ring-1 focus:ring-white/10 cursor-pointer uppercase tracking-wider font-semibold focus:outline-none h-8 flex items-center"
                 >
                   <option value="created_at" className="bg-[#121317]">Date Created</option>
                   <option value="name" className="bg-[#121317]">Garment Name</option>
@@ -241,7 +241,7 @@ export const InventoryCategory = () => {
               {/* Ascending / Descending Toggle Button */}
               <button
                 onClick={() => setSortOrder(sortOrder === "asc" ? "desc" : "asc")}
-                className="p-1.5 hover:bg-white/5 rounded text-on-surface transition-all flex items-center gap-1.5 cursor-pointer font-bold font-label-sm text-[9px] uppercase tracking-widest"
+                className="h-8 px-2.5 hover:bg-white/5 rounded text-on-surface border border-white/10 transition-all flex items-center gap-1.5 cursor-pointer font-bold font-label-sm text-[9px] uppercase tracking-widest"
                 title={sortOrder === "asc" ? "Ascending order" : "Descending order"}
               >
                 <span className="material-symbols-outlined text-base">

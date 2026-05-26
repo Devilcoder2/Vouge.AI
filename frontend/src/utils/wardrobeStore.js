@@ -398,6 +398,14 @@ export const resetWardrobe = () => {
 
 const API_BASE = "http://localhost:8000/api/wardrobe";
 
+export const formatImageUrl = (url) => {
+  if (!url) return "/assets/curation_collage_feature.png";
+  if (url.startsWith("/v1/media/") || url.startsWith("/api/")) {
+    return `http://localhost:8000${url}`;
+  }
+  return url;
+};
+
 export const apiListCategories = async (searchQuery = "") => {
   try {
     const url = `${API_BASE}/categories${searchQuery ? `?search=${encodeURIComponent(searchQuery)}` : ""}`;
@@ -408,6 +416,7 @@ export const apiListCategories = async (searchQuery = "") => {
     // Auto-map backward compatibility path slugs
     return data.map(cat => ({
       ...cat,
+      image: formatImageUrl(cat.image),
       path: cat.path || `/app/inventory/${cat.id}`
     }));
   } catch (err) {
@@ -435,6 +444,7 @@ export const apiCreateCategory = async (payload) => {
     const data = await res.json();
     return {
       ...data,
+      image: formatImageUrl(data.image),
       path: data.path || `/app/inventory/${data.id}`
     };
   } catch (err) {
@@ -465,14 +475,20 @@ export const apiGetCategory = async (categoryId) => {
     let items = [];
     if (itemsRes.ok) {
       const itemsData = await itemsRes.json();
-      items = itemsData.data;
+      items = (itemsData.data || []).map(item => ({
+        ...item,
+        image: formatImageUrl(item.image)
+      }));
     }
     
     return {
       title: catMeta.name,
       description: `${catMeta.subtitle || "Digital Archive"} Collection`,
       items: items,
-      rawMeta: catMeta
+      rawMeta: {
+        ...catMeta,
+        image: formatImageUrl(catMeta.image)
+      }
     };
   } catch (err) {
     console.warn(`Backend category fetch failed for ${categoryId}, using localStorage:`, err);
@@ -494,6 +510,7 @@ export const apiUpdateCategory = async (categoryId, payload) => {
     const data = await res.json();
     return {
       ...data,
+      image: formatImageUrl(data.image),
       path: data.path || `/app/inventory/${data.id}`
     };
   } catch (err) {
@@ -550,7 +567,13 @@ export const apiListItems = async (params = {}) => {
     const res = await fetch(`${API_BASE}/items?${query.toString()}`);
     if (!res.ok) throw new Error("Backend responded with error code " + res.status);
     const data = await res.json();
-    return data;
+    return {
+      ...data,
+      data: (data.data || []).map(item => ({
+        ...item,
+        image: formatImageUrl(item.image)
+      }))
+    };
   } catch (err) {
     console.warn("Backend list items API unavailable, using localStorage fallback:", err);
     const allItems = getWardrobeItems();
@@ -614,12 +637,35 @@ export const apiGetItem = async (itemId) => {
     const res = await fetch(`${API_BASE}/items/${itemId}`);
     if (!res.ok) throw new Error("Item details not found on backend");
     const data = await res.json();
-    return data;
+    return {
+      ...data,
+      image: formatImageUrl(data.image)
+    };
   } catch (err) {
     console.warn(`Backend fetch failed for item ${itemId}, using localStorage:`, err);
     const items = getWardrobeItems();
     const found = items.find(item => item.id === itemId);
     if (!found) throw new Error("Item not found");
+
+    // OFFLINE HISTORY LOGGER: Append item view to history log
+    try {
+      const HISTORY_KEY = "vogue_wardrobe_history_logs";
+      let history = JSON.parse(localStorage.getItem(HISTORY_KEY) || "[]");
+      // Remove any existing log for this same item to move it to top
+      history = history.filter(h => h.item.id !== itemId);
+      history.unshift({
+        id: "hist-local-" + Math.random().toString(36).substr(2, 9),
+        item: found,
+        viewedAt: new Date().toISOString(),
+        relativeTimeLabel: "Just now"
+      });
+      // Limit local history size to 30 elements
+      if (history.length > 30) history = history.slice(0, 30);
+      localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
+    } catch (e) {
+      console.error("Failed to append offline history log:", e);
+    }
+
     return found;
   }
 };
@@ -636,7 +682,10 @@ export const apiCreateItem = async (payload) => {
       throw new Error(errData.detail || "Error creating wardrobe item");
     }
     const data = await res.json();
-    return data;
+    return {
+      ...data,
+      image: formatImageUrl(data.image)
+    };
   } catch (err) {
     console.warn("Backend items POST unavailable, saving to localStorage fallback:", err);
     const newId = Math.random().toString(36).substr(2, 9);
@@ -666,7 +715,10 @@ export const apiUpdateItem = async (itemId, payload) => {
       throw new Error(errData.detail || "Error updating item details");
     }
     const data = await res.json();
-    return data;
+    return {
+      ...data,
+      image: formatImageUrl(data.image)
+    };
   } catch (err) {
     console.warn(`Backend item PUT failed for ${itemId}, updating localStorage:`, err);
     const allItems = getWardrobeItems();
@@ -696,6 +748,161 @@ export const apiDeleteItem = async (itemId) => {
     const filtered = allItems.filter(item => item.id !== itemId);
     saveWardrobeItems(filtered);
     return true;
+  }
+};
+
+export const apiGetWardrobeStats = async () => {
+  try {
+    const res = await fetch(`${API_BASE}/stats`);
+    if (!res.ok) throw new Error("Backend stats endpoint returned error code " + res.status);
+    const data = await res.json();
+    return data;
+  } catch (err) {
+    console.warn("Backend stats API unavailable, calculating from localStorage fallback:", err);
+    const items = getWardrobeItems();
+    const totalPieces = items.length;
+    const verifiedPieces = items.filter(item => item.verified).length;
+    const syncPercentage = totalPieces > 0 ? Math.round((verifiedPieces / totalPieces) * 1000) / 10 : 0.0;
+    
+    // Simulate outfits count from local storage
+    const outfitsData = localStorage.getItem("vogue_outfits_list");
+    const outfitsCount = outfitsData ? JSON.parse(outfitsData).length : 5; // Default stubs
+    
+    return {
+      syncPercentage,
+      totalPieces,
+      outfitsCount
+    };
+  }
+};
+
+export const apiListHistory = async (page = 1, limit = 10) => {
+  try {
+    const res = await fetch(`${API_BASE}/history?page=${page}&limit=${limit}`);
+    if (!res.ok) throw new Error("Backend history endpoint returned error code " + res.status);
+    const data = await res.json();
+    return {
+      ...data,
+      data: (data.data || []).map(log => ({
+        ...log,
+        item: log.item ? { ...log.item, image: formatImageUrl(log.item.image) } : null
+      }))
+    };
+  } catch (err) {
+    console.warn("Backend history API unavailable, using localStorage fallback:", err);
+    const HISTORY_KEY = "vogue_wardrobe_history_logs";
+    let history = [];
+    try {
+      const stored = localStorage.getItem(HISTORY_KEY);
+      if (stored) {
+        history = JSON.parse(stored);
+      } else {
+        const items = getWardrobeItems();
+        history = [
+          {
+            id: "hist-1",
+            item: items.find(i => i.id === "blouse") || items[1] || {},
+            viewedAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
+            relativeTimeLabel: "2 hours ago"
+          },
+          {
+            id: "hist-2",
+            item: items.find(i => i.id === "sneakers") || items[2] || {},
+            viewedAt: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
+            relativeTimeLabel: "Yesterday"
+          }
+        ];
+        localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
+      }
+    } catch (e) {
+      console.error("Error reading fallback history logs:", e);
+    }
+    
+    const totalCount = history.length;
+    const totalPages = Math.ceil(totalCount / limit);
+    const paginated = history.slice((page - 1) * limit, page * limit);
+    
+    return {
+      data: paginated,
+      meta: {
+        currentPage: page,
+        pageSize: limit,
+        totalPages: totalPages,
+        totalCount: totalCount,
+        hasNextPage: page < totalPages,
+        hasPrevPage: page > 1
+      }
+    };
+  }
+};
+
+export const apiScanImage = async (imageFile) => {
+  try {
+    const formData = new FormData();
+    formData.append("image", imageFile);
+    
+    const res = await fetch(`${API_BASE}/scan`, {
+      method: "POST",
+      body: formData
+    });
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(errData.detail || "Error scanning garment image");
+    }
+    const data = await res.json();
+    return data;
+  } catch (err) {
+    console.warn("Backend scan image endpoint failed, using local classifier fallback:", err);
+    
+    const filename = imageFile.name ? imageFile.name.toLowerCase() : "";
+    let colorName = "Midnight Charcoal";
+    let colorHex = "#2A2B2E";
+    let textile = "100% Cotton knit";
+    let category = "tops";
+    let subcategory = "knitwear";
+    let confidence = 0.92;
+    
+    if (filename.includes("pant") || filename.includes("jean") || filename.includes("trouser")) {
+      colorName = "Stone Gray";
+      colorHex = "#8E9192";
+      textile = "Japanese Selvedge rigid denim";
+      category = "bottoms";
+      subcategory = "denim";
+      confidence = 0.89;
+    } else if (filename.includes("shoe") || filename.includes("sneaker") || filename.includes("boot")) {
+      colorName = "Polished Black";
+      colorHex = "#0D0E12";
+      textile = "Calfskin leather";
+      category = "footwear";
+      subcategory = "derby";
+      confidence = 0.95;
+    } else if (filename.includes("coat") || filename.includes("jacket") || filename.includes("trench")) {
+      colorName = "Espresso Taupe";
+      colorHex = "#292A2E";
+      textile = "Cashmere wool blend";
+      category = "outerwear";
+      subcategory = "coat";
+      confidence = 0.91;
+    } else if (filename.includes("watch") || filename.includes("belt") || filename.includes("bag")) {
+      colorName = "Champagne Gold";
+      colorHex = "#D4AF37";
+      textile = "18k gold plated";
+      category = "accessories";
+      subcategory = "timepiece";
+      confidence = 0.88;
+    }
+    
+    await new Promise(resolve => setTimeout(resolve, 2500));
+    
+    return {
+      colorName,
+      colorHex,
+      textile,
+      category,
+      subcategory,
+      confidence,
+      tempFileKey: "/assets/curation_collage_feature.png"
+    };
   }
 };
 

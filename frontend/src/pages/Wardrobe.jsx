@@ -4,7 +4,9 @@ import Layout from "../components/layout/Layout";
 import { 
   apiListCategories, 
   apiUpdateCategory, 
-  apiDeleteCategory 
+  apiDeleteCategory,
+  apiGetWardrobeStats,
+  apiListHistory
 } from "../utils/wardrobeStore";
 
 // Beautiful, curated Quiet Luxury fashion images already present in project assets
@@ -37,6 +39,11 @@ export const Wardrobe = () => {
   const [deletingCategory, setDeletingCategory] = useState(null);
   const [cleanupMode, setCleanupMode] = useState("keep_orphans");
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Stats & History States
+  const [stats, setStats] = useState({ syncPercentage: 0, totalPieces: 0, outfitsCount: 0 });
+  const [historyLogs, setHistoryLogs] = useState([]);
+  const [isStatsLoading, setIsStatsLoading] = useState(true);
 
   // Scroll reveal Intersection Observer on mount
   useEffect(() => {
@@ -84,6 +91,26 @@ export const Wardrobe = () => {
     return () => window.removeEventListener("click", handleOutsideClick);
   }, []);
 
+  // Stats and viewed history logger integration
+  const refreshStatsAndHistory = async () => {
+    setIsStatsLoading(true);
+    try {
+      const statsData = await apiGetWardrobeStats();
+      setStats(statsData);
+
+      const historyData = await apiListHistory(1, 5);
+      setHistoryLogs(historyData.data || []);
+    } catch (err) {
+      console.error("Error refreshing stats and viewed history sidebar:", err);
+    } finally {
+      setIsStatsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    refreshStatsAndHistory();
+  }, []);
+
   const openEditModal = (cat, e) => {
     e.preventDefault();
     e.stopPropagation();
@@ -111,6 +138,7 @@ export const Wardrobe = () => {
       triggerToast(`Collection "${editName}" Updated`);
       setEditingCategory(null);
       loadCategories(searchQuery);
+      refreshStatsAndHistory();
     } catch (err) {
       alert(err.message || "Failed to update category");
     } finally {
@@ -133,6 +161,7 @@ export const Wardrobe = () => {
       triggerToast(`Collection "${deletingCategory.name}" Deleted`);
       setDeletingCategory(null);
       loadCategories(searchQuery);
+      refreshStatsAndHistory();
     } catch (err) {
       alert(err.message || "Failed to delete category");
     } finally {
@@ -351,8 +380,8 @@ export const Wardrobe = () => {
         <aside className="hidden lg:flex lg:col-span-4 xl:col-span-3 flex-col gap-gutter reveal">
           
           {/* Stats Card */}
-          <div className="glass-panel rounded-2xl p-8 ai-glow shadow-xl">
-            <h3 className="font-display text-xl italic luxury-text-gradient mb-8 select-none">
+          <div className="glass-panel rounded-2xl p-8 ai-glow shadow-xl select-none">
+            <h3 className="font-display text-xl italic luxury-text-gradient mb-8">
               Wardrobe Pulse
             </h3>
             
@@ -363,7 +392,7 @@ export const Wardrobe = () => {
                     Items Sync
                   </p>
                   <p className="font-display text-2xl luxury-text-gradient font-semibold">
-                    84%
+                    {stats.syncPercentage}%
                   </p>
                 </div>
                 <span className="material-symbols-outlined text-tertiary/20 text-2xl">
@@ -371,8 +400,11 @@ export const Wardrobe = () => {
                 </span>
               </div>
               
-              <div className="h-[2px] bg-white/5 rounded-full overflow-hidden select-none">
-                <div className="h-full bg-tertiary/60 w-[84%] rounded-full"></div>
+              <div className="h-[2px] bg-white/5 rounded-full overflow-hidden">
+                <div 
+                  className="h-full bg-tertiary/60 rounded-full transition-all duration-1000 ease-out"
+                  style={{ width: `${stats.syncPercentage}%` }}
+                ></div>
               </div>
               
               <div className="grid grid-cols-2 gap-4 pt-6 border-t border-white/5">
@@ -381,7 +413,7 @@ export const Wardrobe = () => {
                     Total Pieces
                   </p>
                   <p className="font-display text-xl luxury-text-gradient font-semibold">
-                    1,248
+                    {stats.totalPieces.toLocaleString()}
                   </p>
                 </div>
                 <div>
@@ -389,7 +421,7 @@ export const Wardrobe = () => {
                     Outfits
                   </p>
                   <p className="font-display text-xl luxury-text-gradient font-semibold">
-                    342
+                    {stats.outfitsCount.toLocaleString()}
                   </p>
                 </div>
               </div>
@@ -403,57 +435,47 @@ export const Wardrobe = () => {
             </h3>
             
             <div className="space-y-6 flex-grow overflow-y-auto no-scrollbar max-h-[350px]">
-              
-              {/* Blouse */}
-              <div 
-                onClick={() => navigate("/app/item/tops/blouse")}
-                className="flex items-center gap-4 group cursor-pointer"
-              >
-                <div className="w-16 h-20 rounded-lg overflow-hidden flex-shrink-0 glass-panel shadow-md">
-                  <img
-                    alt="Noir Silk"
-                    className="w-full h-full object-cover grayscale opacity-60 group-hover:grayscale-0 group-hover:opacity-100 transition-all duration-700"
-                    src="/assets/blouse_recent.png"
-                  />
+              {historyLogs.length > 0 ? (
+                historyLogs.map((log) => {
+                  const item = log.item || {};
+                  const primaryCategory = item.categories && item.categories.length > 0 ? item.categories[0] : "all";
+                  return (
+                    <div 
+                      key={log.id}
+                      onClick={() => navigate(`/app/item/${primaryCategory}/${item.id}`)}
+                      className="flex items-center gap-4 group cursor-pointer"
+                    >
+                      <div className="w-16 h-20 rounded-lg overflow-hidden flex-shrink-0 glass-panel shadow-md relative">
+                        <img
+                          alt={item.name}
+                          className="w-full h-full object-cover grayscale opacity-60 group-hover:grayscale-0 group-hover:opacity-100 transition-all duration-700"
+                          src={item.image || "/assets/curation_collage_feature.png"}
+                        />
+                      </div>
+                      <div>
+                        <h4 className="font-body text-xs text-on-surface-variant/80 group-hover:text-on-surface transition-colors font-medium font-light truncate max-w-[120px]">
+                          {item.name}
+                        </h4>
+                        <p className="font-label-sm text-[8px] text-on-surface-variant/30 uppercase mt-1.5 tracking-widest font-semibold">
+                          {log.relativeTimeLabel || "Just now"}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })
+              ) : (
+                <div className="flex flex-col items-center justify-center py-10 select-none text-center">
+                  <span className="material-symbols-outlined text-outline/30 text-3xl mb-2">history</span>
+                  <p className="text-[10px] uppercase font-label-sm tracking-wider text-on-surface-variant/40">No views recorded</p>
                 </div>
-                <div>
-                  <h4 className="font-body text-xs text-on-surface-variant/80 group-hover:text-on-surface transition-colors font-medium font-light">
-                    Noir Silk Blouse
-                  </h4>
-                  <p className="font-label-sm text-[8px] text-on-surface-variant/30 uppercase mt-1.5 tracking-widest font-semibold">
-                    2 hours ago
-                  </p>
-                </div>
-              </div>
-
-              {/* Sneakers */}
-              <div 
-                onClick={() => navigate("/app/item/footwear/sneakers")}
-                className="flex items-center gap-4 group cursor-pointer"
-              >
-                <div className="w-16 h-20 rounded-lg overflow-hidden flex-shrink-0 glass-panel shadow-md">
-                  <img
-                    alt="Low Tops"
-                    className="w-full h-full object-cover grayscale opacity-60 group-hover:grayscale-0 group-hover:opacity-100 transition-all duration-700"
-                    src="/assets/sneakers_recent.png"
-                  />
-                </div>
-                <div>
-                  <h4 className="font-body text-xs text-on-surface-variant/80 group-hover:text-on-surface transition-colors font-medium font-light">
-                    Essential Sneakers
-                  </h4>
-                  <p className="font-label-sm text-[8px] text-on-surface-variant/30 uppercase mt-1.5 tracking-widest font-semibold">
-                    Yesterday
-                  </p>
-                </div>
-              </div>
+              )}
             </div>
             
             <button 
               onClick={() => navigate("/app/recommendations")}
               className="mt-8 text-on-surface-variant/40 hover:text-on-surface transition-colors font-label-sm text-[9px] uppercase tracking-[0.2em] text-left font-bold cursor-pointer"
             >
-              View All History
+              View Recommended Outfits
             </button>
           </div>
 
