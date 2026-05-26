@@ -180,6 +180,7 @@ def test_saved_outfits_crud_flow(mock_closet_items):
             self.season = "autumn"
             self.score = 92
             self.reasoning = "Elegant professional composition."
+            self.preview_url = None
             self.created_at = datetime.now(timezone.utc)
             self.items = [MockSavedOutfitItemLink(mock_closet_items[0]), MockSavedOutfitItemLink(mock_closet_items[3]), MockSavedOutfitItemLink(mock_closet_items[6])]
 
@@ -219,6 +220,8 @@ def test_saved_outfits_crud_flow(mock_closet_items):
         class MockDB:
             async def execute(self, stmt):
                 return MockResult(stmt)
+            async def scalar(self, stmt):
+                return len(saved_outfits_db)
             def add(self, obj): pass
             async def commit(self): pass
             async def refresh(self, obj): pass
@@ -247,10 +250,16 @@ def test_saved_outfits_crud_flow(mock_closet_items):
     assert save_resp.status_code == 201
     
     # 2. Get Saved Outfits
-    get_resp = client.get("/recommendations/saved-outfits?user_id=test_user_id")
+    get_resp = client.get("/recommendations/saved-outfits?user_id=test_user_id&page=1&limit=5")
     assert get_resp.status_code == 200
-    assert len(get_resp.json()) == 1
-    assert get_resp.json()[0]["name"] == "My Office Classic Outfit"
+    data = get_resp.json()
+    assert "data" in data
+    assert "meta" in data
+    assert len(data["data"]) == 1
+    assert data["data"][0]["name"] == "My Office Classic Outfit"
+    assert data["meta"]["currentPage"] == 1
+    assert data["meta"]["pageSize"] == 5
+    assert data["meta"]["totalCount"] == 1
     
     # 3. Delete Saved Outfit
     del_resp = client.delete(f"/recommendations/saved-outfits/{test_outfit_id}")
@@ -278,17 +287,26 @@ def test_moat_analysis_endpoints(mock_closet_items):
     app.dependency_overrides[get_db] = mock_get_db
 
     # 1. Gap Analysis
-    gap_resp = client.get("/recommendations/gap-analysis")
+    gap_resp = client.get("/recommendations/gap-analysis?page=1&limit=2")
     assert gap_resp.status_code == 200
     gap_data = gap_resp.json()
-    assert len(gap_data) > 0
-    assert "unlocked_outfits_count" in gap_data[0]
+    assert "data" in gap_data
+    assert "meta" in gap_data
+    assert len(gap_data["data"]) > 0
+    assert "unlocked_outfits_count" in gap_data["data"][0]
+    assert gap_data["meta"]["currentPage"] == 1
+    assert gap_data["meta"]["pageSize"] == 2
     
     # 2. Versatility Analysis
-    vers_resp = client.get("/recommendations/versatility")
+    vers_resp = client.get("/recommendations/versatility?page=1&limit=3")
     assert vers_resp.status_code == 200
     vers_data = vers_resp.json()
-    assert len(vers_data) > 0
-    assert "versatility_score" in vers_data[0]
+    assert "data" in vers_data
+    assert "meta" in vers_data
+    assert len(vers_data["data"]) > 0
+    assert "versatility_score" in vers_data["data"][0]
+    assert vers_data["meta"]["currentPage"] == 1
+    assert vers_data["meta"]["pageSize"] == 3
     
     app.dependency_overrides.clear()
+

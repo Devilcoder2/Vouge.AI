@@ -1,12 +1,14 @@
 import logging
 import uuid
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from fastapi.responses import FileResponse, Response
+from sqlalchemy import func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from uuid import UUID, uuid4
 from typing import List
 from datetime import datetime, timezone
+
 
 from app.config import settings
 from app.database.session import get_db
@@ -25,7 +27,12 @@ from app.schemas.recommendation import (
     UserProfileResponse,
     UserFeedbackRequest,
     OutfitPreviewRequest,
+    PaginatedSavedOutfitResponse,
+    PaginatedGapAnalysisResponse,
+    PaginatedVersatilityResponse,
+    PaginationMeta,
 )
+
 from app.services.outfit_preview_builder import OutfitPreviewBuilder
 from app.recommendation.generators.candidate_generator import CandidateGenerator
 from app.recommendation.scorers.outfit_scorer import OutfitScorer
@@ -349,19 +356,31 @@ async def save_outfit(
             detail=f"Failed to save outfit: {str(e)}"
         )
 
-@router.get("/saved-outfits", response_model=List[SavedOutfitResponse], status_code=status.HTTP_200_OK)
+@router.get("/saved-outfits", response_model=PaginatedSavedOutfitResponse, status_code=status.HTTP_200_OK)
 async def get_saved_outfits(
     user_id: str = "default_user",
+    page: int = Query(1, ge=1),
+    limit: int = Query(10, ge=1),
     db: AsyncSession = Depends(get_db)
 ):
     """
-    Retrieves all previously saved outfit combinations.
+    Retrieves all previously saved outfit combinations. Supports pagination.
     """
     try:
+        # Calculate total matching count
+        total_count = await db.scalar(
+            select(func.count())
+            .select_from(SavedOutfit)
+            .where(SavedOutfit.user_id == user_id)
+        ) or 0
+
+        offset = (page - 1) * limit
         result = await db.execute(
             select(SavedOutfit)
             .where(SavedOutfit.user_id == user_id)
             .order_by(SavedOutfit.created_at.desc())
+            .offset(offset)
+            .limit(limit)
         )
         outfits = result.scalars().all()
         
@@ -370,19 +389,20 @@ async def get_saved_outfits(
             res_items = []
             for link in outfit.items:
                 gi = link.clothing_item
-                res_items.append(
-                    RecommendationItemResponse(
-                        id=gi.id,
-                        category=gi.category,
-                        subcategory=gi.subcategory,
-                        primary_color=gi.primary_color,
-                        primary_color_hex=gi.primary_color_hex or "#ffffff",
-                        fit=gi.fit,
-                        style=gi.style,
-                        formality=gi.formality,
-                        pattern=gi.pattern
+                if gi:
+                    res_items.append(
+                        RecommendationItemResponse(
+                            id=gi.id,
+                            category=gi.category,
+                            subcategory=gi.subcategory,
+                            primary_color=gi.primary_color,
+                            primary_color_hex=gi.primary_color_hex or "#ffffff",
+                            fit=gi.fit,
+                            style=gi.style,
+                            formality=gi.formality,
+                            pattern=gi.pattern
+                        )
                     )
-                )
             response.append(
                 SavedOutfitResponse(
                     id=outfit.id,
@@ -392,11 +412,23 @@ async def get_saved_outfits(
                     season=outfit.season,
                     score=outfit.score,
                     reasoning=outfit.reasoning,
+                    preview_url=outfit.preview_url,
                     created_at=outfit.created_at or datetime.now(timezone.utc),
                     items=res_items
                 )
             )
-        return response
+            
+        total_pages = (total_count + limit - 1) // limit if total_count > 0 else 0
+        meta = PaginationMeta(
+            currentPage=page,
+            pageSize=limit,
+            totalPages=total_pages,
+            totalCount=total_count,
+            hasNextPage=page < total_pages,
+            hasPrevPage=page > 1
+        )
+        
+        return PaginatedSavedOutfitResponse(data=response, meta=meta)
     except Exception as e:
         logger.error(f"Error retrieving outfits: {str(e)}")
         raise HTTPException(
@@ -433,18 +465,36 @@ async def delete_saved_outfit(
             detail=f"Failed to delete saved outfit: {str(e)}"
         )
 
-@router.get("/gap-analysis", response_model=List[GapAnalysisResponse], status_code=status.HTTP_200_OK)
+@router.get("/gap-analysis", response_model=PaginatedGapAnalysisResponse, status_code=status.HTTP_200_OK)
 async def get_gap_analysis(
+    page: int = Query(1, ge=1),
+    limit: int = Query(10, ge=1),
     db: AsyncSession = Depends(get_db)
 ):
     """
     Step 15 Engine: Analyzes missing essential elements in user wardrobe
-    and calculates new outfit combinations they would unlock.
+    and calculates new outfit combinations they would unlock. Supports pagination.
     """
     try:
         result = await db.execute(select(ClothingItem))
         db_items = result.scalars().all()
-        return GapAnalysisEngine.analyze_gaps(db_items)
+        gaps = GapAnalysisEngine.analyze_gaps(db_items)
+        
+        total_count = len(gaps)
+        offset = (page - 1) * limit
+        paginated_gaps = gaps[offset : offset + limit]
+        
+        total_pages = (total_count + limit - 1) // limit if total_count > 0 else 0
+        meta = PaginationMeta(
+            currentPage=page,
+            pageSize=limit,
+            totalPages=total_pages,
+            totalCount=total_count,
+            hasNextPage=page < total_pages,
+            hasPrevPage=page > 1
+        )
+        
+        return PaginatedGapAnalysisResponse(data=paginated_gaps, meta=meta)
     except Exception as e:
         logger.error(f"Gap analysis route failed: {str(e)}")
         raise HTTPException(
@@ -452,17 +502,35 @@ async def get_gap_analysis(
             detail=f"Gap analysis failed: {str(e)}"
         )
 
-@router.get("/versatility", response_model=List[VersatilityResponse], status_code=status.HTTP_200_OK)
+@router.get("/versatility", response_model=PaginatedVersatilityResponse, status_code=status.HTTP_200_OK)
 async def get_versatility_report(
+    page: int = Query(1, ge=1),
+    limit: int = Query(10, ge=1),
     db: AsyncSession = Depends(get_db)
 ):
     """
-    Step 16 Engine: Ranks all closet garments by versatility and outfit reuse counts.
+    Step 16 Engine: Ranks all closet garments by versatility and outfit reuse counts. Supports pagination.
     """
     try:
         result = await db.execute(select(ClothingItem))
         db_items = result.scalars().all()
-        return VersatilityEngine.calculate_versatility(db_items)
+        versatility = VersatilityEngine.calculate_versatility(db_items)
+        
+        total_count = len(versatility)
+        offset = (page - 1) * limit
+        paginated_versatility = versatility[offset : offset + limit]
+        
+        total_pages = (total_count + limit - 1) // limit if total_count > 0 else 0
+        meta = PaginationMeta(
+            currentPage=page,
+            pageSize=limit,
+            totalPages=total_pages,
+            totalCount=total_count,
+            hasNextPage=page < total_pages,
+            hasPrevPage=page > 1
+        )
+        
+        return PaginatedVersatilityResponse(data=paginated_versatility, meta=meta)
     except Exception as e:
         logger.error(f"Versatility report route failed: {str(e)}")
         raise HTTPException(

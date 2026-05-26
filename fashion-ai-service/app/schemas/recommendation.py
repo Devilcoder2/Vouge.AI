@@ -3,6 +3,9 @@ from typing import List, Dict, Any, Optional
 from uuid import UUID
 from datetime import datetime
 
+from app.schemas.wardrobe import PaginationMeta
+
+
 class GenerateOutfitsRequest(BaseModel):
     user_id: Optional[str] = Field("default_user", description="Identifier of the user closet owner")
     occasion: str = Field(..., description="Target occasion for styling, e.g. casual, office, date, gym, wedding")
@@ -126,3 +129,19 @@ class OutfitPreviewRequest(BaseModel):
     occasion: Optional[str] = Field(None, description="Occasion label for footer")
     season: Optional[str] = Field(None, description="Season label for footer")
     reasoning: Optional[str] = Field(None, description="Stylist reasoning snippet for footer")
+
+
+class PaginatedSavedOutfitResponse(BaseModel):
+    data: List[SavedOutfitResponse]
+    meta: PaginationMeta
+
+
+class PaginatedGapAnalysisResponse(BaseModel):
+    data: List[GapAnalysisResponse]
+    meta: PaginationMeta
+
+
+class PaginatedVersatilityResponse(BaseModel):
+    data: List[VersatilityResponse]
+    meta: PaginationMeta
+
