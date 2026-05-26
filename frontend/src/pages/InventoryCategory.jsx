@@ -4,7 +4,8 @@ import Layout from "../components/layout/Layout";
 import { 
   apiGetCategory, 
   apiUpdateCategory, 
-  apiDeleteCategory 
+  apiDeleteCategory,
+  apiListItems
 } from "../utils/wardrobeStore";
 
 // Beautiful, curated Quiet Luxury fashion images already present in project assets
@@ -23,6 +24,21 @@ export const InventoryCategory = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [currentCategory, setCurrentCategory] = useState({ title: "", description: "", items: [], rawMeta: null });
   const [isLoading, setIsLoading] = useState(true);
+
+  // Pagination & Filtering States
+  const [sortBy, setSortBy] = useState("created_at");
+  const [sortOrder, setSortOrder] = useState("desc");
+  const [occasion, setOccasion] = useState("all");
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(8); // 8 items fits standard 2/4 column configurations perfectly
+  const [paginationMeta, setPaginationMeta] = useState({
+    currentPage: 1,
+    pageSize: 8,
+    totalPages: 1,
+    totalCount: 0,
+    hasNextPage: false,
+    hasPrevPage: false
+  });
 
   // Edit / Delete Category Modal States
   const [showEditModal, setShowEditModal] = useState(false);
@@ -64,20 +80,48 @@ export const InventoryCategory = () => {
   // Fetch current category metadata & items asynchronously
   const fetchCategoryData = async () => {
     setIsLoading(true);
-    const data = await apiGetCategory(categoryId);
-    setCurrentCategory(data);
-    setIsLoading(false);
+    try {
+      // 1. Fetch category metadata
+      const catData = await apiGetCategory(categoryId);
+      
+      // 2. Fetch paginated, sorted, and filtered items
+      const itemsData = await apiListItems({
+        categoryId,
+        search: searchQuery,
+        occasion: occasion === "all" ? undefined : occasion,
+        sortBy,
+        sortOrder,
+        page,
+        limit
+      });
+
+      setCurrentCategory({
+        title: catData.title,
+        description: catData.description,
+        items: itemsData.data || [],
+        rawMeta: catData.rawMeta
+      });
+
+      if (itemsData.meta) {
+        setPaginationMeta(itemsData.meta);
+      }
+    } catch (err) {
+      console.error("Error loading category inventory details:", err);
+    } finally {
+      setIsLoading(false);
+    }
   };
+
+  // Reset to page 1 when filters or search change
+  useEffect(() => {
+    setPage(1);
+  }, [searchQuery, occasion, sortBy, sortOrder]);
 
   useEffect(() => {
     fetchCategoryData();
-  }, [categoryId]);
+  }, [categoryId, searchQuery, sortBy, sortOrder, occasion, page]);
 
-  const filteredItems = (currentCategory.items || []).filter(
-    (item) =>
-      item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      item.textile.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredItems = currentCategory.items || [];
 
   // Edit Actions
   const openEditModal = () => {
@@ -151,14 +195,15 @@ export const InventoryCategory = () => {
     <Layout>
       <div className="space-y-8 max-w-container-max mx-auto w-full pb-20">
         
-        {/* Search & Filter */}
-        <section className="relative hero-reveal" style={{ animationDelay: "0.1s" }}>
-          <div className="flex gap-4 items-center">
+        {/* Search & Sort & Filter Bar */}
+        <section className="relative hero-reveal space-y-4" style={{ animationDelay: "0.1s" }}>
+          <div className="flex flex-col md:flex-row gap-4 items-stretch md:items-center">
+            {/* Search Input Box */}
             <div className="relative flex-grow w-full glass-panel rounded-xl overflow-hidden flex items-center px-6 py-4 focus-within:ring-1 focus-within:ring-white/20 transition-all shadow-lg">
               <span className="material-symbols-outlined text-outline mr-4 select-none">search</span>
               <input
                 className="bg-transparent border-none w-full text-on-surface font-body-md text-body-md focus:ring-0 focus:outline-none placeholder:text-outline-variant/50"
-                placeholder="Search Inventory"
+                placeholder="Search digitized pieces..."
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
@@ -173,15 +218,68 @@ export const InventoryCategory = () => {
                   <span className="material-symbols-outlined text-lg">close</span>
                 </button>
               )}
+            </div>
 
-              <div className="h-6 w-[1px] bg-white/10 mx-3 select-none"></div>
-              <button 
-                onClick={() => navigate("/app/analysis")}
-                className="text-primary hover:opacity-80 transition-opacity flex items-center justify-center p-1 cursor-pointer" 
-                title="Style Filter"
+            {/* Sort & Order Dropdowns inside a unified Glass Panel */}
+            <div className="flex flex-wrap items-center gap-3 glass-panel rounded-xl px-4 py-3 shadow-lg select-none">
+              <div className="flex items-center gap-2">
+                <span className="material-symbols-outlined text-on-surface-variant/55 text-lg">sort</span>
+                <span className="font-label-sm text-[9px] uppercase tracking-wider text-on-surface-variant font-semibold">Sort By</span>
+                <select
+                  value={sortBy}
+                  onChange={(e) => setSortBy(e.target.value)}
+                  className="bg-background/45 border-0 rounded px-2.5 py-1 text-[11px] font-label-sm text-on-surface focus:ring-1 focus:ring-white/10 cursor-pointer uppercase tracking-wider font-semibold focus:outline-none"
+                >
+                  <option value="created_at" className="bg-[#121317]">Date Created</option>
+                  <option value="name" className="bg-[#121317]">Garment Name</option>
+                  <option value="formality" className="bg-[#121317]">Formality</option>
+                </select>
+              </div>
+
+              <div className="h-4 w-[1px] bg-white/10 mx-1"></div>
+
+              {/* Ascending / Descending Toggle Button */}
+              <button
+                onClick={() => setSortOrder(sortOrder === "asc" ? "desc" : "asc")}
+                className="p-1.5 hover:bg-white/5 rounded text-on-surface transition-all flex items-center gap-1.5 cursor-pointer font-bold font-label-sm text-[9px] uppercase tracking-widest"
+                title={sortOrder === "asc" ? "Ascending order" : "Descending order"}
               >
-                <span className="material-symbols-outlined text-xl">tune</span>
+                <span className="material-symbols-outlined text-base">
+                  {sortOrder === "asc" ? "arrow_upward" : "arrow_downward"}
+                </span>
+                {sortOrder === "asc" ? "Asc" : "Desc"}
               </button>
+            </div>
+          </div>
+
+          {/* Occasion Filter Pill Carousel */}
+          <div className="glass-panel rounded-xl px-6 py-3.5 flex items-center gap-4 overflow-x-auto scrollbar-none shadow-md select-none">
+            <span className="font-label-sm text-[9px] uppercase tracking-widest text-on-surface-variant font-bold whitespace-nowrap flex items-center gap-1.5">
+              <span className="material-symbols-outlined text-base text-tertiary">celebration</span> Occasions
+            </span>
+            <div className="flex gap-2.5 overflow-x-auto scrollbar-none pb-0.5">
+              {[
+                { id: "all", label: "All Capsules" },
+                { id: "casual", label: "Casual Rotation" },
+                { id: "work", label: "Workplace Chic" },
+                { id: "evening", label: "Evening Drape" },
+                { id: "event", label: "Formal Event" }
+              ].map((occ) => {
+                const isActive = occasion === occ.id;
+                return (
+                  <button
+                    key={occ.id}
+                    onClick={() => setOccasion(occ.id)}
+                    className={`px-4 py-1.5 rounded-full border text-[10px] uppercase tracking-wider font-semibold transition-all duration-300 cursor-pointer whitespace-nowrap ${
+                      isActive
+                        ? "border-primary bg-white/5 text-on-surface shadow-md"
+                        : "border-white/5 text-on-surface-variant hover:border-white/10 hover:text-on-surface bg-transparent"
+                    }`}
+                  >
+                    {occ.label}
+                  </button>
+                );
+              })}
             </div>
           </div>
         </section>
@@ -193,7 +291,7 @@ export const InventoryCategory = () => {
               {currentCategory.title}
             </h2>
             <p className="font-label-sm text-xs text-on-surface-variant uppercase tracking-[0.2em] font-semibold">
-              {filteredItems.length} Editorial Piece{filteredItems.length !== 1 ? "s" : ""}
+              {paginationMeta.totalCount} Editorial Piece{paginationMeta.totalCount !== 1 ? "s" : ""}
             </p>
           </div>
 
@@ -306,6 +404,31 @@ export const InventoryCategory = () => {
             </div>
           )}
         </section>
+
+        {/* Pagination Footer */}
+        {!isLoading && paginationMeta.totalPages > 1 && (
+          <section className="reveal py-8 border-t border-white/5 flex flex-col sm:flex-row justify-between items-center gap-4 select-none">
+            <p className="font-label-sm text-[10px] uppercase tracking-[0.15em] text-on-surface-variant/70 font-semibold">
+              Showing page {paginationMeta.currentPage} of {paginationMeta.totalPages} ({paginationMeta.totalCount} pieces total)
+            </p>
+            <div className="flex items-center gap-3">
+              <button
+                disabled={!paginationMeta.hasPrevPage}
+                onClick={() => setPage(page - 1)}
+                className="px-5 py-3 border border-white/10 rounded-lg font-label-sm text-[10px] uppercase tracking-widest text-on-surface hover:bg-white/5 disabled:opacity-30 disabled:hover:bg-transparent transition-all cursor-pointer font-bold flex items-center gap-1 active:scale-95 shadow-md"
+              >
+                <span className="material-symbols-outlined text-[14px]">arrow_back_ios</span> Prev
+              </button>
+              <button
+                disabled={!paginationMeta.hasNextPage}
+                onClick={() => setPage(page + 1)}
+                className="px-5 py-3 border border-white/10 rounded-lg font-label-sm text-[10px] uppercase tracking-widest text-on-surface hover:bg-white/5 disabled:opacity-30 disabled:hover:bg-transparent transition-all cursor-pointer font-bold flex items-center gap-1 active:scale-95 shadow-md"
+              >
+                Next <span className="material-symbols-outlined text-[14px]">arrow_forward_ios</span>
+              </button>
+            </div>
+          </section>
+        )}
       </div>
 
       {/* ==================== EDIT CATEGORY MODAL ==================== */}

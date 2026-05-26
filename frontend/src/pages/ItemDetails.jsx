@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { getItem, updateItem, deleteItem } from "../utils/wardrobeStore";
+import { apiGetItem, apiUpdateItem, apiDeleteItem } from "../utils/wardrobeStore";
 import Layout from "../components/layout/Layout";
 
 // Predefined premium Quiet Luxury color palette options
@@ -57,6 +57,11 @@ export const ItemDetails = ({
   // Original data for Reset functionality
   const [originalData, setOriginalData] = useState(null);
 
+  // Async States
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorMsg, setErrorMsg] = useState("");
+
   // Detect EyeDropper API support on mount & reset viewport scroll to top
   useEffect(() => {
     setIsEyeDropperSupported("EyeDropper" in window);
@@ -67,29 +72,51 @@ export const ItemDetails = ({
     }
   }, [activeCategoryId, activeItemId]);
 
-  // Load item details from store
+  // Load item details from store asynchronously
   useEffect(() => {
-    const item = getItem(activeCategoryId, activeItemId);
-    if (item) {
-      const data = {
-        name: item.name || "",
-        textile: item.textile || "",
-        colorName: item.colorName || "Midnight Charcoal",
-        colorHex: item.colorHex || "#2A2B2E",
-        secondaryColors: item.secondaryColors || [],
-        moreDetails: item.moreDetails || "",
-        occasion: item.occasion || "casual",
-        image: item.image || "/assets/blouse_recent.png",
-        verified: !!item.verified,
-        long: !!item.long,
-        hasAIService: !!item.hasAIService,
-        categoryId: activeCategoryId,
-        categories: item.categories || [activeCategoryId]
-      };
-      
-      setOriginalData(data);
-      loadFields(data);
-    }
+    let isMounted = true;
+    const fetchItem = async () => {
+      setIsLoading(true);
+      setErrorMsg("");
+      try {
+        const item = await apiGetItem(activeItemId);
+        if (isMounted) {
+          if (item) {
+            const data = {
+              name: item.name || "",
+              textile: item.textile || "",
+              colorName: item.colorName || "Midnight Charcoal",
+              colorHex: item.colorHex || "#2A2B2E",
+              secondaryColors: item.secondaryColors || [],
+              moreDetails: item.moreDetails || "",
+              occasion: item.occasion || "casual",
+              image: item.image || "/assets/blouse_recent.png",
+              verified: !!item.verified,
+              long: !!item.long,
+              hasAIService: !!item.hasAIService,
+              categoryId: activeCategoryId,
+              categories: item.categories || [activeCategoryId]
+            };
+            
+            setOriginalData(data);
+            loadFields(data);
+          } else {
+            setErrorMsg("Garment not found.");
+          }
+        }
+      } catch (err) {
+        console.error("Error fetching item details:", err);
+        if (isMounted) {
+          setErrorMsg(err.message || "Failed to load garment specifications.");
+        }
+      } finally {
+        if (isMounted) setIsLoading(false);
+      }
+    };
+    fetchItem();
+    return () => {
+      isMounted = false;
+    };
   }, [activeCategoryId, activeItemId]);
 
   const loadFields = (data) => {
@@ -169,7 +196,7 @@ export const ItemDetails = ({
   };
 
   // Handle Save
-  const handleSave = () => {
+  const handleSave = async () => {
     const updatedFields = {
       name,
       textile,
@@ -185,44 +212,76 @@ export const ItemDetails = ({
       categories: selectedCategories
     };
 
-    if (isControlled && onSave) {
-      onSave(activeCategoryId, activeItemId, updatedFields);
-    } else {
-      updateItem(activeCategoryId, activeItemId, updatedFields);
-      setOriginalData(updatedFields);
-      setIsEditMode(false);
+    setIsSubmitting(true);
+    try {
+      if (isControlled && onSave) {
+        await onSave(activeCategoryId, activeItemId, updatedFields);
+      } else {
+        const updatedItem = await apiUpdateItem(activeItemId, updatedFields);
+        const data = {
+          name: updatedItem.name || "",
+          textile: updatedItem.textile || "",
+          colorName: updatedItem.colorName || "Midnight Charcoal",
+          colorHex: updatedItem.colorHex || "#2A2B2E",
+          secondaryColors: updatedItem.secondaryColors || [],
+          moreDetails: updatedItem.moreDetails || "",
+          occasion: updatedItem.occasion || "casual",
+          image: updatedItem.image || "/assets/blouse_recent.png",
+          verified: !!updatedItem.verified,
+          long: !!updatedItem.long,
+          hasAIService: !!updatedItem.hasAIService,
+          categoryId: activeCategoryId,
+          categories: updatedItem.categories || [activeCategoryId]
+        };
+        setOriginalData(data);
+        loadFields(data);
+        setIsEditMode(false);
 
-      // Create micro toast notification
-      const toast = document.createElement("div");
-      toast.className = "fixed bottom-36 left-1/2 -translate-x-1/2 bg-on-surface text-background px-6 py-3 rounded-full font-label-sm text-[11px] uppercase tracking-[0.2em] shadow-2xl z-[99] border border-white/10 animate-fade-in flex items-center gap-2";
-      toast.innerHTML = `<span class="material-symbols-outlined text-sm font-bold text-tertiary">check_circle</span> Changes Saved`;
-      document.body.appendChild(toast);
-      setTimeout(() => {
-        toast.classList.add("animate-fade-out");
-        setTimeout(() => toast.remove(), 400);
-      }, 2000);
-
-      // If active category has changed (no longer in categories list), redirect
-      if (!selectedCategories.includes(activeCategoryId) && selectedCategories.length > 0) {
+        // Create micro toast notification
+        const toast = document.createElement("div");
+        toast.className = "fixed bottom-36 left-1/2 -translate-x-1/2 bg-on-surface text-background px-6 py-3 rounded-full font-label-sm text-[11px] uppercase tracking-[0.2em] shadow-2xl z-[99] border border-white/10 animate-fade-in flex items-center gap-2";
+        toast.innerHTML = `<span class="material-symbols-outlined text-sm font-bold text-tertiary">check_circle</span> Changes Saved`;
+        document.body.appendChild(toast);
         setTimeout(() => {
-          navigate(`/app/inventory/${selectedCategories[0]}`);
-        }, 800);
+          toast.classList.add("animate-fade-out");
+          setTimeout(() => toast.remove(), 400);
+        }, 2000);
+
+        // If active category has changed (no longer in categories list), redirect
+        if (!selectedCategories.includes(activeCategoryId) && selectedCategories.length > 0) {
+          setTimeout(() => {
+            navigate(`/app/inventory/${selectedCategories[0]}`);
+          }, 800);
+        }
       }
+    } catch (err) {
+      console.error("Error saving item changes:", err);
+      alert(err.message || "Failed to save wardrobe changes.");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   // Handle Delete
-  const handleDelete = () => {
+  const handleDelete = async () => {
     const confirmDelete = window.confirm(
       `Are you sure you want to remove "${name}" from your digitized wardrobe?`
     );
     if (!confirmDelete) return;
 
-    if (isControlled && onDelete) {
-      onDelete(activeCategoryId, activeItemId);
-    } else {
-      deleteItem(activeCategoryId, activeItemId);
-      navigate(`/app/inventory/${activeCategoryId}`);
+    setIsSubmitting(true);
+    try {
+      if (isControlled && onDelete) {
+        await onDelete(activeCategoryId, activeItemId);
+      } else {
+        await apiDeleteItem(activeItemId);
+        navigate(`/app/inventory/${activeCategoryId}`);
+      }
+    } catch (err) {
+      console.error("Error deleting item:", err);
+      alert(err.message || "Failed to remove garment from wardrobe.");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -258,6 +317,15 @@ export const ItemDetails = ({
   // Internal content renderer for layout structures
   const renderContent = () => (
     <div className="w-full relative pb-40">
+      {/* Submitting Overlay */}
+      {isSubmitting && (
+        <div className="fixed inset-0 bg-background/60 backdrop-blur-md z-50 flex flex-col items-center justify-center select-none animate-fade-in">
+          <div className="w-10 h-10 border-2 border-tertiary/20 border-t-tertiary rounded-full animate-spin mb-4"></div>
+          <p className="font-label-sm text-[10px] uppercase tracking-widest text-on-surface-variant/85">
+            Archiving changes to digital vault...
+          </p>
+        </div>
+      )}
       
       {/* Internal Sub-Header / Control bar below breadcrumbs */}
       <div className="flex justify-between items-center mb-8 pb-4 border-b border-white/5">
@@ -723,6 +791,59 @@ export const ItemDetails = ({
       </div>
     </div>
   );
+
+  if (isLoading) {
+    const loadingContent = (
+      <div className="flex flex-col items-center justify-center py-40 select-none min-h-[60vh]">
+        <div className="w-10 h-10 border-2 border-tertiary/20 border-t-tertiary rounded-full animate-spin mb-4"></div>
+        <p className="font-label-sm text-[10px] uppercase tracking-widest text-on-surface-variant/50">
+          Retrieving Archival Garment...
+        </p>
+      </div>
+    );
+    if (isControlled) {
+      return (
+        <div className="relative bg-background text-on-surface w-full flex items-center justify-center min-h-[50vh]">
+          {loadingContent}
+        </div>
+      );
+    }
+    return (
+      <Layout hideNav={true} showBack={true} title="Item Details">
+        {loadingContent}
+      </Layout>
+    );
+  }
+
+  if (errorMsg) {
+    const errorContent = (
+      <div className="flex flex-col items-center justify-center py-20 px-6 text-center select-none min-h-[50vh]">
+        <span className="material-symbols-outlined text-error text-4xl mb-4">warning</span>
+        <h3 className="font-display text-lg italic text-on-surface mb-2">Garment Synchronization Error</h3>
+        <p className="font-body-md text-sm text-on-surface-variant/80 max-w-md mb-8 leading-relaxed">
+          {errorMsg}
+        </p>
+        <button
+          onClick={handleClose}
+          className="px-6 py-3 border border-white/10 rounded-lg font-label-sm text-[10px] uppercase tracking-widest text-on-surface hover:bg-white/5 transition-all active:scale-95 cursor-pointer font-bold"
+        >
+          Return to Archive
+        </button>
+      </div>
+    );
+    if (isControlled) {
+      return (
+        <div className="relative bg-background text-on-surface w-full">
+          {errorContent}
+        </div>
+      );
+    }
+    return (
+      <Layout hideNav={true} showBack={true} title="Error">
+        {errorContent}
+      </Layout>
+    );
+  }
 
   // If in widget/controlled mode, render bare content, otherwise wrap inside standard VOGUE.AI Layout
   if (isControlled) {

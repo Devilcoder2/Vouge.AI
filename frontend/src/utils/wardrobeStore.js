@@ -532,3 +532,171 @@ export const apiDeleteCategory = async (categoryId, cleanupMode = "keep_orphans"
   }
 };
 
+// ── WARDROBE ITEMS API INTEGRATIONS (WITH RESILIENT LOCALSTORAGE FALLBACKS) ───
+
+export const apiListItems = async (params = {}) => {
+  try {
+    const query = new URLSearchParams();
+    if (params.categoryId) query.append("categoryId", params.categoryId);
+    if (params.search) query.append("search", params.search);
+    if (params.occasion && params.occasion !== "all") query.append("occasion", params.occasion);
+    if (params.verified !== undefined && params.verified !== null) query.append("verified", params.verified);
+    if (params.hasAIService !== undefined && params.hasAIService !== null) query.append("hasAIService", params.hasAIService);
+    if (params.sortBy) query.append("sortBy", params.sortBy);
+    if (params.sortOrder) query.append("sortOrder", params.sortOrder);
+    if (params.page) query.append("page", params.page);
+    if (params.limit) query.append("limit", params.limit);
+
+    const res = await fetch(`${API_BASE}/items?${query.toString()}`);
+    if (!res.ok) throw new Error("Backend responded with error code " + res.status);
+    const data = await res.json();
+    return data;
+  } catch (err) {
+    console.warn("Backend list items API unavailable, using localStorage fallback:", err);
+    const allItems = getWardrobeItems();
+    let filtered = allItems;
+    if (params.categoryId) {
+      filtered = filtered.filter(item => (item.categories || []).includes(params.categoryId));
+    }
+    if (params.search) {
+      const q = params.search.toLowerCase();
+      filtered = filtered.filter(item => 
+        (item.name || "").toLowerCase().includes(q) || 
+        (item.textile || "").toLowerCase().includes(q)
+      );
+    }
+    if (params.occasion && params.occasion !== "all") {
+      filtered = filtered.filter(item => (item.occasion || "").toLowerCase() === params.occasion.toLowerCase());
+    }
+    if (params.verified !== undefined && params.verified !== null) {
+      filtered = filtered.filter(item => !!item.verified === !!params.verified);
+    }
+    if (params.hasAIService !== undefined && params.hasAIService !== null) {
+      filtered = filtered.filter(item => !!item.hasAIService === !!params.hasAIService);
+    }
+    
+    // Sort
+    const sortBy = params.sortBy || "created_at";
+    const sortOrder = params.sortOrder || "desc";
+    filtered.sort((a, b) => {
+      let comparison = 0;
+      if (sortBy === "name") {
+        comparison = (a.name || "").localeCompare(b.name || "");
+      } else {
+        comparison = (a.id || "").localeCompare(b.id || "");
+      }
+      return sortOrder === "asc" ? comparison : -comparison;
+    });
+
+    // Paginate
+    const page = params.page || 1;
+    const limit = params.limit || 10;
+    const totalCount = filtered.length;
+    const totalPages = Math.ceil(totalCount / limit);
+    const paginated = filtered.slice((page - 1) * limit, page * limit);
+
+    return {
+      data: paginated,
+      meta: {
+        currentPage: page,
+        pageSize: limit,
+        totalPages: totalPages,
+        totalCount: totalCount,
+        hasNextPage: page < totalPages,
+        hasPrevPage: page > 1
+      }
+    };
+  }
+};
+
+export const apiGetItem = async (itemId) => {
+  try {
+    const res = await fetch(`${API_BASE}/items/${itemId}`);
+    if (!res.ok) throw new Error("Item details not found on backend");
+    const data = await res.json();
+    return data;
+  } catch (err) {
+    console.warn(`Backend fetch failed for item ${itemId}, using localStorage:`, err);
+    const items = getWardrobeItems();
+    const found = items.find(item => item.id === itemId);
+    if (!found) throw new Error("Item not found");
+    return found;
+  }
+};
+
+export const apiCreateItem = async (payload) => {
+  try {
+    const res = await fetch(`${API_BASE}/items`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(errData.detail || "Error creating wardrobe item");
+    }
+    const data = await res.json();
+    return data;
+  } catch (err) {
+    console.warn("Backend items POST unavailable, saving to localStorage fallback:", err);
+    const newId = Math.random().toString(36).substr(2, 9);
+    const newItem = {
+      id: newId,
+      ...payload,
+      verified: !!payload.verified,
+      long: !!payload.long,
+      hasAIService: !!payload.hasAIService
+    };
+    const allItems = getWardrobeItems();
+    allItems.push(newItem);
+    saveWardrobeItems(allItems);
+    return newItem;
+  }
+};
+
+export const apiUpdateItem = async (itemId, payload) => {
+  try {
+    const res = await fetch(`${API_BASE}/items/${itemId}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(errData.detail || "Error updating item details");
+    }
+    const data = await res.json();
+    return data;
+  } catch (err) {
+    console.warn(`Backend item PUT failed for ${itemId}, updating localStorage:`, err);
+    const allItems = getWardrobeItems();
+    const idx = allItems.findIndex(item => item.id === itemId);
+    if (idx !== -1) {
+      allItems[idx] = { ...allItems[idx], ...payload };
+      saveWardrobeItems(allItems);
+      return allItems[idx];
+    }
+    throw new Error("Item not found in localStorage");
+  }
+};
+
+export const apiDeleteItem = async (itemId) => {
+  try {
+    const res = await fetch(`${API_BASE}/items/${itemId}`, {
+      method: "DELETE"
+    });
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(errData.detail || "Error deleting wardrobe item");
+    }
+    return true;
+  } catch (err) {
+    console.warn(`Backend item DELETE failed for ${itemId}, deleting from localStorage:`, err);
+    const allItems = getWardrobeItems();
+    const filtered = allItems.filter(item => item.id !== itemId);
+    saveWardrobeItems(filtered);
+    return true;
+  }
+};
+
+
