@@ -153,6 +153,34 @@ async def create_outfit_post(
             await db.refresh(actor)
 
     post_id = uuid4()
+
+    # Dynamic CLIP image embedding generation
+    from PIL import Image
+    import os
+    from app.config import settings
+    from app.ai.embedding_service import FashionEmbeddingService
+
+    local_path = None
+    if "uploads/" in payload.image_url:
+        filename = payload.image_url.split("uploads/")[-1]
+        local_path = settings.UPLOAD_DIR / filename
+    elif "processed/" in payload.image_url:
+        filename = payload.image_url.split("processed/")[-1]
+        local_path = settings.PROCESSED_DIR / filename
+    else:
+        local_path = settings.UPLOAD_DIR / os.path.basename(payload.image_url)
+
+    embedding_path = None
+    if local_path and local_path.exists():
+        try:
+            img = Image.open(local_path).convert("RGB")
+            emb_service = FashionEmbeddingService()
+            vector = emb_service.generate_image_embedding(img)
+            saved_path = FashionEmbeddingService.save_embedding_to_disk(vector, f"post_{post_id}")
+            embedding_path = str(saved_path)
+        except Exception as e:
+            logger.error(f"Failed to generate CLIP image embedding for post {post_id}: {e}")
+
     new_post = SocialPost(
         id=post_id,
         user_id=actor.id,
@@ -162,6 +190,7 @@ async def create_outfit_post(
         occasion_tag=payload.occasion_tag,
         style_persona=payload.style_persona,
         community_id=payload.community_id,
+        embedding_path=embedding_path,
         created_at=datetime.now(timezone.utc)
     )
     db.add(new_post)
@@ -583,4 +612,69 @@ async def explore_style_showroom(
         popular_creators=popular_creators,
         trending_occasions=trending_occasions
     )
+
+
+@router.get("/search", response_model=List[PostResponse])
+async def social_semantic_search(
+    q: str = Query(..., min_length=1, description="Natural language search query"),
+    db: AsyncSession = Depends(get_db),
+    current_user: Optional[User] = Depends(get_optional_current_user)
+):
+    """
+    Step 7 Integration Moat: Performs CLIP-backed semantic natural language 
+    text-to-image search across the styling showroom posts collection.
+    """
+    actor_id = current_user.id if current_user else UUID("00000000-0000-0000-0000-000000000001")
+
+    # 1. Encode text query via CLIPModel
+    import numpy as np
+    from pathlib import Path
+    from app.ai.embedding_service import FashionEmbeddingService
+
+    try:
+        emb_service = FashionEmbeddingService()
+        query_vector = emb_service.generate_text_embedding(q)
+    except Exception as e:
+        logger.error(f"Semantic search text encoding failed: {e}")
+        query_vector = None
+
+    top_posts = []
+
+    if query_vector is not None:
+        # Fetch posts with embeddings
+        stmt = select(SocialPost).where(SocialPost.embedding_path.isnot(None))
+        result = await db.execute(stmt)
+        posts = result.scalars().all()
+
+        scored_posts = []
+        for post in posts:
+            try:
+                post_vector = FashionEmbeddingService.load_embedding_from_disk(Path(post.embedding_path))
+                similarity = float(np.dot(query_vector, post_vector))
+                scored_posts.append((post, similarity))
+            except Exception as e:
+                logger.warning(f"Failed to load embedding for post {post.id}: {e}")
+
+        scored_posts.sort(key=lambda x: x[1], reverse=True)
+        top_posts = [item[0] for item in scored_posts[:10]]
+
+    # 2. Unified Fallback: Keyword search if no vector matches or CLIP was unavailable
+    if not top_posts:
+        keyword_stmt = (
+            select(SocialPost)
+            .where(
+                (SocialPost.caption.ilike(f"%{q}%")) |
+                (SocialPost.style_persona.ilike(f"%{q}%")) |
+                (SocialPost.occasion_tag.ilike(f"%{q}%"))
+            )
+            .order_by(SocialPost.created_at.desc())
+            .limit(10)
+        )
+        res = await db.execute(keyword_stmt)
+        top_posts = res.scalars().all()
+
+    # Hydrate and map to response schemas
+    from app.routes.feed import map_posts_to_response
+    return await map_posts_to_response(top_posts, actor_id, db)
+
 

@@ -103,6 +103,12 @@ def mock_db_session(monkeypatch):
         async def refresh(self, obj): pass
 
     mock_db = MockDB()
+
+    # Isolated monkeypatch overrides for CLIP vector embedding generators
+    import numpy as np
+    from app.ai.embedding_service import FashionEmbeddingService
+    monkeypatch.setattr(FashionEmbeddingService, "generate_image_embedding", lambda self, img: np.array([0.1] * 512, dtype=np.float32))
+    monkeypatch.setattr(FashionEmbeddingService, "generate_text_embedding", lambda self, text: np.array([0.1] * 512, dtype=np.float32))
     
     async def mock_get_db():
         yield mock_db
@@ -204,4 +210,15 @@ def test_explore_showroom(mock_db_session):
 
     assert len(data["popular_creators"]) > 0
     assert data["popular_creators"][0]["username"] == "social_curator"
+
+
+def test_social_semantic_search(mock_db_session):
+    """Verifies that GET /v1/social/search query searches semantically using CLIP embeddings."""
+    response = client.get("/v1/social/search?q=oversized+streetwear+autumn")
+    assert response.status_code == 200
+    data = response.json()
+    assert isinstance(data, list)
+    assert len(data) > 0
+    assert data[0]["caption"] == "test post"
+
 

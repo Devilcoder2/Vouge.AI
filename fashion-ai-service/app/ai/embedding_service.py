@@ -77,6 +77,30 @@ class FashionEmbeddingService:
             logger.error(f"Embedding generation failed: {str(e)}")
             raise RuntimeError(f"Embedding pipeline failed: {str(e)}")
 
+    def generate_text_embedding(self, text: str) -> np.ndarray:
+        """
+        Passes a text query through CLIP processor, executes L2 normalization,
+        and outputs a 512-dimensional float32 numpy vector.
+        """
+        self._lazy_load()
+        
+        try:
+            inputs = self.processor(text=[text], return_tensors="pt", padding=True)
+            inputs = {k: v.to(self.device) for k, v in inputs.items()}
+
+            with torch.no_grad():
+                outputs = self.model.get_text_features(**inputs)
+                normalized_features = outputs / outputs.norm(p=2, dim=-1, keepdim=True)
+                embedding = normalized_features[0].cpu().numpy().astype(np.float32)
+                
+            logger.info(f"Generated CLIP text embedding array with shape: {embedding.shape}")
+            return embedding
+
+        except Exception as e:
+            logger.error(f"Text embedding generation failed: {str(e)}")
+            raise RuntimeError(f"Text embedding pipeline failed: {str(e)}")
+
+
     @staticmethod
     def save_embedding_to_disk(embedding: np.ndarray, item_id: str) -> Path:
         """Saves a raw numpy vector array as a binary float32 .npy file locally."""

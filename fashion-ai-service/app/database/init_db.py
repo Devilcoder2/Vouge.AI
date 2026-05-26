@@ -122,6 +122,9 @@ async def init_models():
             await conn.execute(text(
                 "ALTER TABLE social_posts ADD COLUMN IF NOT EXISTS community_id UUID;"
             ))
+            await conn.execute(text(
+                "ALTER TABLE social_posts ADD COLUMN IF NOT EXISTS embedding_path VARCHAR;"
+            ))
 
             # Seed default categories
             await conn.execute(text("""

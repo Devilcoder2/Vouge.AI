@@ -341,6 +341,7 @@ class SocialPost(Base):
     updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now())
 
     community_id = Column(UUID(as_uuid=True), ForeignKey("fashion_communities.id", ondelete="SET NULL"), nullable=True, index=True)
+    embedding_path = Column(String, nullable=True)
 
     # Relationships
     user = relationship("User", back_populates="posts")
