@@ -815,24 +815,47 @@ async def get_editorial_look(
         )
         cached = res_cache.scalars().all()
         if cached:
-            top_cached = cached[0]
-            item_ids = [str(link.clothing_item_id) for link in top_cached.items if link.clothing_item_id]
-            if len(item_ids) >= 2:
-                return EditorialLookResponse(
-                    outfit_id=str(top_cached.id),
-                    editorial_title=f"The Editorial Edit: {top_cached.template_name or 'Modern Noir'}",
-                    subtitle="Architectural Minimalism",
-                    description=top_cached.reasoning or "A cinematic approach to your Monday. Tailored elegantly for London weather.",
-                    hero_image_url=top_cached.preview_url or "/assets/modern_noir_hero.png",
-                    vogue_score=top_cached.score,
-                    occasion=top_cached.occasion.upper(),
-                    weather_context=WeatherContext(
-                        location="London",
-                        temperature_celsius=12.0,
-                        condition="Overcast"
-                    ),
-                    clothing_item_ids=item_ids
-                )
+            for top_cached in cached:
+                # Validate the preview image file physically exists if preview_url is provided
+                if top_cached.preview_url:
+                    filename = None
+                    if "/preview-image/" in top_cached.preview_url:
+                        filename = top_cached.preview_url.split("/preview-image/")[-1]
+                    elif "/previews/" in top_cached.preview_url:
+                        filename = top_cached.preview_url.split("/previews/")[-1]
+                    
+                    if filename:
+                        file_path = settings.PREVIEWS_DIR / filename
+                        if not file_path.exists():
+                            logger.warning(
+                                f"Stale outfit cache entry {top_cached.id} detected for user {user_id}. "
+                                f"Backing file '{filename}' is missing from filesystem. Clearing stale record."
+                            )
+                            try:
+                                if hasattr(db, "delete"):
+                                    await db.delete(top_cached)
+                                    await db.commit()
+                            except Exception as delete_err:
+                                logger.error(f"Failed to delete stale cache outfit {top_cached.id}: {delete_err}")
+                            continue
+
+                item_ids = [str(link.clothing_item_id) for link in top_cached.items if link.clothing_item_id]
+                if len(item_ids) >= 2:
+                    return EditorialLookResponse(
+                        outfit_id=str(top_cached.id),
+                        editorial_title=f"The Editorial Edit: {top_cached.template_name or 'Modern Noir'}",
+                        subtitle="Architectural Minimalism",
+                        description=top_cached.reasoning or "A cinematic approach to your Monday. Tailored elegantly for London weather.",
+                        hero_image_url=top_cached.preview_url or "/assets/modern_noir_hero.png",
+                        vogue_score=top_cached.score,
+                        occasion=top_cached.occasion.upper(),
+                        weather_context=WeatherContext(
+                            location="London",
+                            temperature_celsius=12.0,
+                            condition="Overcast"
+                        ),
+                        clothing_item_ids=item_ids
+                    )
     except Exception as cache_err:
         logger.warning(f"Error fetching cached outfit for editorial look: {cache_err}")
 

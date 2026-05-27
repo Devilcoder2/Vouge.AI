@@ -101,6 +101,13 @@ def _smart_override_for_dashboard(current_user: MockUser):
             def add(self, obj):
                 self._added.append(obj)
 
+            async def delete(self, obj):
+                if obj in self._added:
+                    self._added.remove(obj)
+                global _GENERATED_OUTFITS
+                if obj in _GENERATED_OUTFITS:
+                    _GENERATED_OUTFITS.remove(obj)
+
             async def execute(self, stmt):
                 stmt_str = str(stmt).lower()
 
@@ -234,6 +241,28 @@ async def test_editorial_look_fallback_and_cached():
         assert "Winter Elegance" in data_cached["editorial_title"]
         assert data_cached["vogue_score"] == 98
         assert len(data_cached["clothing_item_ids"]) == 2
+
+        # 4. Add a cached GeneratedOutfit with a missing preview file and verify it gets evicted
+        stale_cached_outfit = MockGeneratedOutfit(
+            user_id=mock_user.id,
+            occasion="evening",
+            season="winter",
+            score=95,
+            template_name="Stale Cache Outfit",
+            reasoning="A stale cache entry whose preview image is physically missing.",
+            items=items
+        )
+        stale_cached_outfit.preview_url = "/recommendations/preview-image/nonexistent_file_xyz_preview.png"
+        _GENERATED_OUTFITS.insert(0, stale_cached_outfit)
+
+        # Verify it falls back to the previous valid cached outfit and evicts the stale one!
+        response_cache_after_stale = client.get(f"/recommendations/editorial-look?user_id={mock_user.id}")
+        assert response_cache_after_stale.status_code == 200
+        data_after_stale = response_cache_after_stale.json()
+        
+        assert data_after_stale["outfit_id"] == str(cached_outfit.id)
+        assert "Winter Elegance" in data_after_stale["editorial_title"]
+        assert stale_cached_outfit not in _GENERATED_OUTFITS
 
     finally:
         app.dependency_overrides.clear()
