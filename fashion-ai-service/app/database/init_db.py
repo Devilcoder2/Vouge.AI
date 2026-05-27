@@ -72,6 +72,10 @@ async def init_models():
             await conn.execute(text(
                 "ALTER TABLE saved_outfits ADD COLUMN IF NOT EXISTS preview_url VARCHAR;"
             ))
+            await conn.execute(text(
+                "ALTER TABLE user_style_profiles ADD COLUMN IF NOT EXISTS color_overreliance_index JSON;"
+            ))
+
 
             # Safe online migrations for user social attributes
             await conn.execute(text(

@@ -17,6 +17,14 @@ class FeedbackResponse(BaseModel):
     success: bool
     message: str
 
+class ColorOverrelianceIndex(BaseModel):
+    """
+    Pydantic schema representing dominant color percentage dependencies in user closet.
+    """
+    color_name: str
+    percentage_dependency: float
+    advice: str
+
 class StyleProfileResponse(BaseModel):
     """
     Pydantic schema representing the user's persistently learned style profile preferences.
@@ -29,4 +37,6 @@ class StyleProfileResponse(BaseModel):
     preferred_styles: List[str]
     preferred_formality_range: List[int]
     favorite_categories: List[str]
+    color_overreliance_index: Optional[ColorOverrelianceIndex] = None
     updated_at: datetime
+

@@ -18,6 +18,9 @@ from app.routes.wardrobe import router as wardrobe_router
 from app.routes.social import router as social_router
 from app.routes.feed import router as feed_router
 from app.routes.community import router as community_router
+from app.routes.dashboard import router as dashboard_router
+from app.routes.chat import router as chat_router
+
 
 # Configure detailed runtime logging to standard output
 logging.basicConfig(
@@ -75,6 +78,9 @@ app.include_router(media_router)
 
 # Phase 3B: Digital Wardrobe REST API
 app.include_router(wardrobe_router)
+app.include_router(dashboard_router)
+app.include_router(chat_router)
+
 
 # Phase 4: Social Platform Extensions (vanity identity, postings, following feeds, recreation)
 app.include_router(social_router)

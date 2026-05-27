@@ -259,6 +259,7 @@ class UserStyleProfile(Base):
     preferred_styles = Column(ARRAY(String), nullable=False, default=list)
     preferred_formality_range = Column(ARRAY(Integer), nullable=False, default=list)
     favorite_categories = Column(ARRAY(String), nullable=False, default=list)
+    color_overreliance_index = Column(JSON, nullable=True)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     # Relationship back to User
