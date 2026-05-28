@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import Layout from "../components/layout/Layout";
 import { getOutfit, formatPreviewUrl } from "../utils/outfitStore";
+import { ModelTryOn } from "../components/ui/ModelTryOn";
 
 export const OutfitDetails = () => {
   const { outfitId } = useParams();
@@ -93,15 +94,15 @@ export const OutfitDetails = () => {
       <div className="w-full relative pb-20 max-w-container-max mx-auto animate-fade-in">
         
         {/* Top Hero Image Spotlight */}
-        <section className="relative w-full aspect-[4/5] sm:aspect-[16/7] md:rounded-2xl overflow-hidden mb-8 group border border-white/5 shadow-2xl">
-          <img
-            className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-103"
-            src={formatPreviewUrl(outfit.heroImage) || outfit.heroImage}
-            alt={outfit.name}
+        <section className="relative w-full aspect-[4/5] sm:aspect-[16/7] md:rounded-2xl overflow-hidden mb-8 group border border-white/5 shadow-2xl flex items-center justify-center bg-[#0d0e12]">
+          <ModelTryOn
+            items={outfit.items}
+            showLabels={true}
+            className="!aspect-square sm:!aspect-[16/7] !rounded-none !border-none max-w-full"
           />
           {/* Bottom text overlays */}
-          <div className="absolute inset-0 bg-gradient-to-t from-background via-transparent to-transparent opacity-80 z-10"></div>
-          <div className="absolute bottom-6 left-6 z-20 max-w-lg select-none">
+          <div className="absolute inset-0 bg-gradient-to-t from-background via-transparent to-transparent opacity-80 z-10 pointer-events-none"></div>
+          <div className="absolute bottom-6 left-6 z-20 max-w-lg select-none pointer-events-none">
             <span className="font-label-sm text-[10px] text-tertiary uppercase tracking-[0.25em] mb-1 block font-bold">
               {outfit.subtitle}
             </span>

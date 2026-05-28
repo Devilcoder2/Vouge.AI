@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import Layout from "../components/layout/Layout";
+import { ModelTryOn } from "../components/ui/ModelTryOn";
 import { 
   apiGetEditorialLook, 
   apiGetTrends, 
@@ -118,11 +119,10 @@ export const Dashboard = () => {
             className="relative w-full aspect-[4/5] md:aspect-[21/9] rounded-2xl overflow-hidden group shadow-2xl hero-reveal select-none"
             style={{ animationDelay: "0.1s" }}
           >
-            <img
-              alt={editorialLook.name}
-              className="absolute inset-0 w-full h-full object-cover group-hover:scale-103 transition-transform duration-[2000ms] ease-out"
-              style={{ objectPosition: "center 15%" }}
-              src={editorialLook.heroImage}
+            <ModelTryOn
+              items={editorialLook.items}
+              showLabels={false}
+              className="!aspect-square md:!aspect-[21/9] !rounded-none !border-none max-w-full z-0 pointer-events-none"
             />
             <div className="absolute inset-0 hero-gradient"></div>
             <div className="absolute inset-0 p-6 md:p-12 lg:p-16 flex flex-col justify-end">

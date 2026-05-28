@@ -11,6 +11,7 @@ const DEFAULT_PROFILE = {
   weight: "185 lbs",
   skinTone: "Fair/Cool",
   premium: true,
+  gender: "male",
   image: "https://lh3.googleusercontent.com/aida-public/AB6AXuCs3NZRBnON-C4U3xY6xUDWe2jDBi2gBVrwP1vfZQWb4rn9oMwoY_hpX83eogBvIIovHoUOzZkR9OlMbsHB0-1WKjUEj-xDMkTDcRUQaowTud6hf5eDeYdpD6RF1T0IracaYfywmY4iGeUiMujPKNEcLw5Oa2ES5eqXZH7XaIuoZLhRuk6FhPun97E5f4ApA4qe3ge-v1PEpt6lKF2tHbFbpJ57hp23P5PI2YnfuWgdwyvqmBiKIgHKwKD6dphRW6yCZDtDe5Fjx6Ga"
 };
 
@@ -28,6 +29,7 @@ export const Profile = () => {
   const [height, setHeight] = useState("");
   const [weight, setWeight] = useState("");
   const [skinTone, setSkinTone] = useState("");
+  const [gender, setGender] = useState("male");
 
   // Wardrobe statistics state
   const [totalItems, setTotalItems] = useState(14);
@@ -109,6 +111,7 @@ export const Profile = () => {
     setHeight(p.height);
     setWeight(p.weight);
     setSkinTone(p.skinTone);
+    setGender(p.gender || "male");
   };
 
   const handleSave = async () => {
@@ -119,7 +122,8 @@ export const Profile = () => {
       bodyType,
       height,
       weight,
-      skinTone
+      skinTone,
+      gender
     };
     localStorage.setItem(PROFILE_KEY, JSON.stringify(updated));
     setProfile(updated);
@@ -301,13 +305,46 @@ export const Profile = () => {
                 <p className="font-label-sm text-[9px] text-on-surface-variant/50 uppercase tracking-wider font-semibold select-none">Skin Tone</p>
                 {isEditing ? (
                   <input
-                    className="w-full bg-transparent border-0 border-b border-white/10 p-0 py-1 font-body-lg text-sm text-on-surface focus:ring-0 focus:border-tertiary"
+                    className="w-full bg-transparent border-0 border-b border-white/10 p-0 py-1 font-body-lg text-sm text-on-surface focus:ring-0 focus:outline-none focus:border-tertiary"
                     type="text"
                     value={skinTone}
                     onChange={(e) => setSkinTone(e.target.value)}
                   />
                 ) : (
                   <p className="font-body-lg text-sm text-on-surface font-semibold">{profile.skinTone}</p>
+                )}
+              </div>
+
+              {/* Gender */}
+              <div className="glass-card rounded-xl p-4 flex flex-col justify-between min-h-[80px] col-span-2">
+                <p className="font-label-sm text-[9px] text-on-surface-variant/50 uppercase tracking-wider font-semibold select-none">Gender (Try-On Model Bias)</p>
+                {isEditing ? (
+                  <div className="flex gap-4 mt-2">
+                    <button
+                      type="button"
+                      onClick={() => setGender("male")}
+                      className={`flex-grow py-2 rounded border text-xs font-semibold tracking-wider transition-all uppercase cursor-pointer ${
+                        gender === "male"
+                          ? "border-primary bg-white/5 text-on-surface"
+                          : "border-outline-variant/30 text-on-surface-variant hover:border-outline hover:text-on-surface bg-transparent"
+                      }`}
+                    >
+                      Male Model
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setGender("female")}
+                      className={`flex-grow py-2 rounded border text-xs font-semibold tracking-wider transition-all uppercase cursor-pointer ${
+                        gender === "female"
+                          ? "border-primary bg-white/5 text-on-surface"
+                          : "border-outline-variant/30 text-on-surface-variant hover:border-outline hover:text-on-surface bg-transparent"
+                      }`}
+                    >
+                      Female Model
+                    </button>
+                  </div>
+                ) : (
+                  <p className="font-body-lg text-sm text-on-surface font-semibold capitalize">{profile.gender || "male"} Model</p>
                 )}
               </div>
 

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { apiGetItem, apiUpdateItem, apiDeleteItem } from "../utils/wardrobeStore";
 import Layout from "../components/layout/Layout";
+import { ModelTryOn } from "../components/ui/ModelTryOn";
 
 // Predefined premium Quiet Luxury color palette options
 const LUXURY_COLORS = [
@@ -50,6 +51,7 @@ export const ItemDetails = ({
   const [long, setLong] = useState(false);
   const [hasAIService, setHasAIService] = useState(false);
   const [selectedCategories, setSelectedCategories] = useState([]);
+  const [viewMode, setViewMode] = useState("tryon");
 
   // UI state for browser EyeDropper API availability
   const [isEyeDropperSupported, setIsEyeDropperSupported] = useState(false);
@@ -350,16 +352,51 @@ export const ItemDetails = ({
       <div className="grid grid-cols-1 md:grid-cols-12 gap-gutter items-start">
         
         {/* Left Column: Spotlight Image (Sticky on Desktop) - Original Luxury Colors Maintained */}
-        <div className="md:col-span-5 md:sticky md:top-32">
+        <div className="md:col-span-5 md:sticky md:top-32 flex flex-col gap-4">
+          {/* Try-On / Flat Lay Glass Toggle Tabs */}
+          <div className="flex gap-2 bg-white/[0.02] p-1 rounded-lg border border-white/5 w-full select-none">
+            <button
+              type="button"
+              onClick={() => setViewMode("tryon")}
+              className={`flex-grow py-2 text-[10px] uppercase tracking-widest font-semibold rounded-md transition-all cursor-pointer ${
+                viewMode === "tryon" ? "bg-white/5 text-on-surface border border-white/10 font-bold" : "text-on-surface-variant hover:text-on-surface bg-transparent border border-transparent font-medium"
+              }`}
+            >
+              Model Try-On
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode("flat")}
+              className={`flex-grow py-2 text-[10px] uppercase tracking-widest font-semibold rounded-md transition-all cursor-pointer ${
+                viewMode === "flat" ? "bg-white/5 text-on-surface border border-white/10 font-bold" : "text-on-surface-variant hover:text-on-surface bg-transparent border border-transparent font-medium"
+              }`}
+            >
+              Flat Lay
+            </button>
+          </div>
+
           <div className="w-full bg-[#0d0e12] relative flex justify-center rounded-xl overflow-hidden group shadow-2xl border border-white/5">
             <div className="relative w-full aspect-[4/5] md:aspect-square overflow-hidden">
-              <img
-                alt={name || "Wardrobe Item"}
-                className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
-                src={image || "/assets/blouse_recent.png"}
-              />
+              {viewMode === "tryon" ? (
+                <ModelTryOn
+                  items={{
+                    id: activeItemId,
+                    categoryId: selectedCategories[0] || activeCategoryId,
+                    category: selectedCategories[0] || activeCategoryId,
+                    image: image,
+                    name: name
+                  }}
+                  className="!rounded-none !border-none shadow-none"
+                />
+              ) : (
+                <img
+                  alt={name || "Wardrobe Item"}
+                  className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
+                  src={image || "/assets/blouse_recent.png"}
+                />
+              )}
               {/* AI Enhancement Chip Overlay */}
-              <div className="absolute bottom-6 right-6 bg-[#1A1A1A]/40 backdrop-blur-xl border border-tertiary/30 rounded-full px-4 py-2 flex items-center gap-2 shadow-2xl select-none">
+              <div className="absolute bottom-6 right-6 bg-[#1A1A1A]/40 backdrop-blur-xl border border-tertiary/30 rounded-full px-4 py-2 flex items-center gap-2 shadow-2xl select-none z-30">
                 <span
                   className="material-symbols-outlined text-tertiary text-[16px] animate-pulse"
                   style={{ fontVariationSettings: "'FILL' 1" }}

@@ -1,5 +1,6 @@
 import logging
 import uuid
+import os
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from fastapi.responses import FileResponse, Response
 from sqlalchemy import func, delete
@@ -33,6 +34,8 @@ from app.schemas.recommendation import (
     PaginationMeta,
 )
 from app.schemas.dashboard import EditorialLookResponse, RunwayTrendResponse, WeatherContext
+from app.services.tryon_service import VTONService
+from pydantic import BaseModel
 
 
 from app.services.outfit_preview_builder import OutfitPreviewBuilder
@@ -308,6 +311,7 @@ async def generate_outfits(
                     season=payload.season,
                     reasoning=outfit.get("reasoning"),
                     output_path=preview_path,
+                    gender=db_profile.gender if (db_profile and db_profile.gender) else "male"
                 )
                 preview_url = f"/recommendations/preview-image/{preview_filename}"
             except Exception as prev_err:
@@ -743,6 +747,7 @@ async def generate_outfit_preview(
     try:
         # Fetch all requested garments from DB
         outfit_items = []
+        user_id = "default_user"
         for item_id in payload.clothing_item_ids:
             res = await db.execute(select(ClothingItem).where(ClothingItem.id == item_id))
             item = res.scalar_one_or_none()
@@ -756,6 +761,18 @@ async def generate_outfit_preview(
                 "category": item.category,
                 "processed_image_path": item.processed_image_path,
             })
+            if hasattr(item, "user_id") and item.user_id:
+                user_id = item.user_id
+
+        # Query user profile to load active gender preference
+        gender = "male"
+        try:
+            profile_res = await db.execute(select(UserProfile).where(UserProfile.user_id == user_id))
+            db_profile = profile_res.scalar_one_or_none()
+            if db_profile and db_profile.gender:
+                gender = db_profile.gender
+        except Exception as e:
+            logger.warning(f"Failed to query user profile in generate_outfit_preview: {e}")
 
         # Build the preview image bytes
         preview_bytes = OutfitPreviewBuilder.build_preview(
@@ -764,6 +781,7 @@ async def generate_outfit_preview(
             occasion=payload.occasion,
             season=payload.season,
             reasoning=payload.reasoning,
+            gender=gender,
         )
 
         return Response(
@@ -779,6 +797,68 @@ async def generate_outfit_preview(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Preview generation failed: {str(e)}"
+        )
+
+
+class TryOnRequest(BaseModel):
+    item_id: str
+    gender: str = "male"
+
+@router.post("/tryon", status_code=status.HTTP_200_OK)
+async def tryon_item(
+    payload: TryOnRequest,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Triggers the SOTA Virtual Try-On pipeline (VTONService) for a single custom item.
+    """
+    try:
+        # Resolve item UUID or default ID from database
+        try:
+            from uuid import UUID
+            item_uuid = UUID(payload.item_id)
+            res = await db.execute(select(ClothingItem).where(ClothingItem.id == item_uuid))
+        except (ValueError, TypeError):
+            res = await db.execute(select(ClothingItem).where(ClothingItem.id == payload.item_id))
+            
+        item = res.scalar_one_or_none()
+        
+        if not item:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Clothing item '{payload.item_id}' not found in active database."
+            )
+
+        # Resolve image path robustly
+        path_str = item.processed_image_path or item.original_image_path
+        if not path_str:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Clothing item does not have a valid processed image path."
+            )
+            
+        if not os.path.isabs(path_str):
+            full_path = settings.BASE_DIR / path_str
+            if not full_path.exists():
+                full_path = settings.BASE_DIR.parent / path_str
+            path_str = str(full_path)
+
+        # Call the SOTA VTONService pipeline
+        synthesized_url = await VTONService.generate_tryon(
+            garment_image_path=path_str,
+            category=item.category,
+            gender=payload.gender,
+            item_name=item.name
+        )
+
+        return {"tryon_url": synthesized_url}
+    except HTTPException as he:
+        raise he
+    except Exception as e:
+        logger.error(f"Try-On pipeline execution failed: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Try-On pipeline failed: {str(e)}"
         )
 
 

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import Layout from "../components/layout/Layout";
 import { apiCreateItem } from "../utils/wardrobeStore";
+import { ModelTryOn } from "../components/ui/ModelTryOn";
 
 const LUXURY_COLORS = [
   { name: "Midnight Charcoal", hex: "#2A2B2E" },
@@ -40,6 +41,7 @@ export const VerifyItem = () => {
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isEyeDropperSupported, setIsEyeDropperSupported] = useState(false);
+  const [viewMode, setViewMode] = useState("tryon");
 
   // Clean redirection if accessed illegally
   useEffect(() => {
@@ -162,14 +164,48 @@ export const VerifyItem = () => {
         <div className="grid grid-cols-1 md:grid-cols-12 gap-gutter items-start">
           
           {/* Left Column: Image Spotlights */}
-          <div className="md:col-span-5 md:sticky md:top-32">
+          <div className="md:col-span-5 md:sticky md:top-32 flex flex-col gap-4">
+            {/* Try-On / Flat Lay Glass Toggle Tabs */}
+            <div className="flex gap-2 bg-white/[0.02] p-1 rounded-lg border border-white/5 w-full select-none">
+              <button
+                type="button"
+                onClick={() => setViewMode("tryon")}
+                className={`flex-grow py-2 text-[10px] uppercase tracking-widest font-semibold rounded-md transition-all cursor-pointer ${
+                  viewMode === "tryon" ? "bg-white/5 text-on-surface border border-white/10 font-bold" : "text-on-surface-variant hover:text-on-surface bg-transparent border border-transparent font-medium"
+                }`}
+              >
+                Model Try-On
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode("flat")}
+                className={`flex-grow py-2 text-[10px] uppercase tracking-widest font-semibold rounded-md transition-all cursor-pointer ${
+                  viewMode === "flat" ? "bg-white/5 text-on-surface border border-white/10 font-bold" : "text-on-surface-variant hover:text-on-surface bg-transparent border border-transparent font-medium"
+                }`}
+              >
+                Flat Lay
+              </button>
+            </div>
+
             <div className="w-full bg-[#0d0e12] relative flex justify-center rounded-xl overflow-hidden shadow-2xl border border-white/5 aspect-[4/5] md:aspect-square">
-              <img
-                alt="Uploaded garment preview"
-                className="w-full h-full object-cover"
-                src={imageUrl}
-              />
-              <div className="absolute bottom-6 right-6 bg-[#1A1A1A]/40 backdrop-blur-xl border border-tertiary/30 rounded-full px-4 py-2 flex items-center gap-2 shadow-2xl select-none">
+              {viewMode === "tryon" ? (
+                <ModelTryOn
+                  items={{
+                    categoryId: selectedCategories[0],
+                    category: selectedCategories[0],
+                    image: image,
+                    name: name
+                  }}
+                  className="!rounded-none !border-none shadow-none"
+                />
+              ) : (
+                <img
+                  alt="Uploaded garment preview"
+                  className="w-full h-full object-cover"
+                  src={imageUrl}
+                />
+              )}
+              <div className="absolute bottom-6 right-6 bg-[#1A1A1A]/40 backdrop-blur-xl border border-tertiary/30 rounded-full px-4 py-2 flex items-center gap-2 shadow-2xl select-none z-30">
                 <span className="material-symbols-outlined text-tertiary text-[16px] animate-pulse" style={{ fontVariationSettings: "'FILL' 1" }}>
                   auto_awesome
                 </span>

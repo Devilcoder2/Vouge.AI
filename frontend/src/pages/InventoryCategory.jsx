@@ -7,6 +7,7 @@ import {
   apiDeleteCategory,
   apiListItems
 } from "../utils/wardrobeStore";
+import { ModelTryOn } from "../components/ui/ModelTryOn";
 
 // Beautiful, curated Quiet Luxury fashion images already present in project assets
 const CURATED_COVERS = [
@@ -337,16 +338,13 @@ export const InventoryCategory = () => {
                     onClick={() => navigate(`/app/item/${categoryId}/${item.id}`)}
                     className="cursor-pointer overflow-hidden animate-fade-in"
                   >
-                    {/* Image Block with Variable Heights */}
+                    {/* Full Model Try-On View Aspect Ratio Container */}
                     <div
-                      className={`relative overflow-hidden bg-[#1A1A1A] w-full ${
-                        item.long ? "aspect-[3/4.2]" : "aspect-[3/3.6]"
-                      }`}
+                      className="relative overflow-hidden bg-[#0d0e12] w-full aspect-[3/4.8]"
                     >
-                      <img
-                        className="w-full h-full object-cover transition-transform duration-1000 ease-out group-hover:scale-105"
-                        src={item.image}
-                        alt={item.name}
+                      <ModelTryOn
+                        items={item}
+                        className="!w-full !h-full !rounded-none !border-none !shadow-none bg-transparent"
                       />
                       
                       {item.verified && (

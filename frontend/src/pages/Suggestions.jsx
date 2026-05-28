@@ -7,6 +7,7 @@ import {
   apiDeleteSavedOutfit,
   apiSubmitFeedback
 } from "../utils/outfitStore";
+import { ModelTryOn } from "../components/ui/ModelTryOn";
 
 const OCCASIONS = [
   { value: "casual", label: "Casual" },
@@ -466,13 +467,13 @@ export const Suggestions = () => {
                       )}
 
                       {/* Card Spotlight Image (Top 50%) */}
-                      <div className="relative h-[260px] overflow-hidden shrink-0 border-b border-white/5">
-                        <img
-                          src={outfit.heroImage}
-                          alt={outfit.name}
-                          className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-103"
+                      <div className="relative h-[260px] overflow-hidden shrink-0 border-b border-white/5 flex items-center justify-center bg-[#0d0e12]">
+                        <ModelTryOn
+                          items={outfit.items}
+                          showLabels={false}
+                          className="!aspect-square !h-[260px] !rounded-none !border-none max-w-full"
                         />
-                        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/10 to-transparent z-10"></div>
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/10 to-transparent z-10 pointer-events-none"></div>
                         
                         {/* Vogue Score Badge */}
                         <div className="absolute top-4 right-4 z-20 bg-background/85 backdrop-blur-xl border border-white/10 px-3 py-1.5 rounded-xl flex flex-col items-center shadow-lg">
@@ -606,10 +607,10 @@ export const Suggestions = () => {
                     >
                       <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/35 to-transparent z-10"></div>
                       
-                      <img
-                        alt={currentOutfit.name}
-                        className="w-full h-full object-cover pointer-events-none select-none animate-fade-in"
-                        src={currentOutfit.heroImage}
+                      <ModelTryOn
+                        items={currentOutfit.items}
+                        showLabels={false}
+                        className="!aspect-square sm:!aspect-[4/5.6] !rounded-none !border-none max-w-full pointer-events-none select-none"
                       />
 
                       {/* Vogue Score Badge */}
