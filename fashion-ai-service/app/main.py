@@ -20,6 +20,9 @@ from app.routes.feed import router as feed_router
 from app.routes.community import router as community_router
 from app.routes.dashboard import router as dashboard_router
 from app.routes.chat import router as chat_router
+from app.routes.calendar import router as calendar_router
+from app.routes.planner import router as planner_router
+
 
 
 # Configure detailed runtime logging to standard output
@@ -80,6 +83,9 @@ app.include_router(media_router)
 app.include_router(wardrobe_router)
 app.include_router(dashboard_router)
 app.include_router(chat_router)
+app.include_router(calendar_router)
+app.include_router(planner_router)
+
 
 
 # Phase 4: Social Platform Extensions (vanity identity, postings, following feeds, recreation)

@@ -1,7 +1,8 @@
 import uuid
 from datetime import date
-from sqlalchemy import Column, String, Integer, ARRAY, Date, DateTime, Numeric, Boolean, ForeignKey, Text, func
+from sqlalchemy import Column, String, Integer, ARRAY, Date, DateTime, Numeric, Boolean, ForeignKey, Text, func, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID, JSON, JSONB
+
 from sqlalchemy.orm import relationship
 from app.database.session import Base
 
@@ -528,6 +529,82 @@ class RecreatedFit(Base):
     # Relationships
     post = relationship("SocialPost", lazy="selectin")
     user = relationship("User", lazy="selectin")
+
+
+class CalendarEntry(Base):
+    """
+    SQLAlchemy model representing a scheduled outfit entry for a particular date, slot, and user.
+    """
+    __tablename__ = "calendar_entries"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    date = Column(Date, nullable=False)
+    slot = Column(String, nullable=False)  # "office", "gym", "dinner", "casual"
+    outfit_id = Column(UUID(as_uuid=True), ForeignKey("saved_outfits.id", ondelete="SET NULL"), nullable=True)
+    
+    # Real-life physical fit check photo details
+    real_photo_path = Column(String, nullable=True)
+    real_photo_url = Column(String, nullable=True)
+    
+    # Dynamic Calendar Planner additions
+    notes = Column(Text, nullable=True)
+    occasion = Column(String, nullable=True, default="CASUAL")
+    outfit_source = Column(String, nullable=True, default="custom_user")
+    vogue_score = Column(Integer, nullable=True, default=80)
+    
+    created_at = Column(DateTime(timezone=True), default=func.now())
+    updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now())
+
+    # Enforce uniqueness per user_id, date, and slot
+    __table_args__ = (
+        UniqueConstraint("user_id", "date", "slot", name="uix_user_date_slot"),
+    )
+
+    # Relationships
+    user = relationship("User", lazy="selectin")
+    outfit = relationship("SavedOutfit", lazy="selectin")
+    items = relationship("CalendarEntryItem", back_populates="calendar_entry", cascade="all, delete-orphan", lazy="selectin")
+    wear_log_rel = relationship("WearLog", back_populates="planned_outfit", uselist=False, cascade="all, delete-orphan", lazy="selectin")
+
+
+class CalendarEntryItem(Base):
+    """
+    SQLAlchemy model representing clothing items associated with a calendar entry (custom outfits).
+    """
+    __tablename__ = "calendar_entry_items"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    calendar_entry_id = Column(UUID(as_uuid=True), ForeignKey("calendar_entries.id", ondelete="CASCADE"), nullable=False)
+    clothing_item_id = Column(UUID(as_uuid=True), ForeignKey("clothing_items.id", ondelete="CASCADE"), nullable=False)
+
+    # Relationships
+    calendar_entry = relationship("CalendarEntry", back_populates="items")
+    clothing_item = relationship("ClothingItem", lazy="selectin")
+
+
+class WearLog(Base):
+    """
+    SQLAlchemy model representing a user's real-life wear log snap for a specific date.
+    Can optionally be linked to a scheduled planned outfit entry.
+    """
+    __tablename__ = "wear_logs"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    date = Column(Date, nullable=False)
+    image_path = Column(String, nullable=False)
+    image_url = Column(String, nullable=False)
+    notes = Column(Text, nullable=True)
+    planned_outfit_id = Column(UUID(as_uuid=True), ForeignKey("calendar_entries.id", ondelete="SET NULL"), nullable=True)
+
+    created_at = Column(DateTime(timezone=True), default=func.now())
+
+    # Relationships
+    user = relationship("User", lazy="selectin")
+    planned_outfit = relationship("CalendarEntry", back_populates="wear_log_rel", lazy="selectin")
+
+
 
 
 

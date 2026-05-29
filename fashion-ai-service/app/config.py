@@ -69,3 +69,5 @@ settings.PREVIEWS_DIR.mkdir(parents=True, exist_ok=True)
 (settings.UPLOAD_DIR / "processed").mkdir(parents=True, exist_ok=True)
 (settings.UPLOAD_DIR / "thumbnails").mkdir(parents=True, exist_ok=True)
 (settings.UPLOAD_DIR / "previews").mkdir(parents=True, exist_ok=True)
+(settings.UPLOAD_DIR / "calendar").mkdir(parents=True, exist_ok=True)
+

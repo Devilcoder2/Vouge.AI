@@ -38,10 +38,10 @@ async def request_upload_url(
         )
 
     folder = payload.folder.strip("/").lower()
-    if folder not in {"raw", "processed", "thumbnails", "previews"}:
+    if folder not in {"raw", "processed", "thumbnails", "previews", "calendar"}:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid folder destination. Allowed: raw, processed, thumbnails, previews",
+            detail="Invalid folder destination. Allowed: raw, processed, thumbnails, previews, calendar",
         )
 
     # Resolve file extension safely
@@ -105,7 +105,7 @@ async def upload_local_file(
     operations in local offline development environments.
     """
     clean_folder = folder.strip("/").lower()
-    if clean_folder not in {"raw", "processed", "thumbnails", "previews"}:
+    if clean_folder not in {"raw", "processed", "thumbnails", "previews", "calendar"}:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Invalid folder destination.",

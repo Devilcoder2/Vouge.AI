@@ -39,7 +39,11 @@ from app.database.models import (
     GeneratedOutfit,
     GeneratedOutfitItem,
     RecreatedFit,
+    CalendarEntry,
+    CalendarEntryItem,
+    WearLog,
 )
+
 
 
 async def init_models():
@@ -74,6 +78,18 @@ async def init_models():
             ))
             await conn.execute(text(
                 "ALTER TABLE user_style_profiles ADD COLUMN IF NOT EXISTS color_overreliance_index JSON;"
+            ))
+            await conn.execute(text(
+                "ALTER TABLE calendar_entries ADD COLUMN IF NOT EXISTS notes TEXT;"
+            ))
+            await conn.execute(text(
+                "ALTER TABLE calendar_entries ADD COLUMN IF NOT EXISTS occasion VARCHAR;"
+            ))
+            await conn.execute(text(
+                "ALTER TABLE calendar_entries ADD COLUMN IF NOT EXISTS outfit_source VARCHAR;"
+            ))
+            await conn.execute(text(
+                "ALTER TABLE calendar_entries ADD COLUMN IF NOT EXISTS vogue_score INTEGER;"
             ))
 
 
