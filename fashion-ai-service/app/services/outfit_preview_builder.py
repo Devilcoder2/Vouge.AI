@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
+from app.config import BASE_DIR
 
 logger = logging.getLogger("fashion-ai-service")
 
@@ -313,7 +314,7 @@ class OutfitPreviewBuilder:
             # Identify Modern Minimalist outfit template
             if has_trench and has_knit:
                 tryon_filename = f"{gender}_outfit_modern_minimalist.png"
-                tryon_path = settings.BASE_DIR.parent / "frontend" / "public" / "assets" / "tryon" / tryon_filename
+                tryon_path = BASE_DIR.parent / "frontend" / "public" / "assets" / "tryon" / tryon_filename
                 
                 if tryon_path.exists():
                     logger.info(f"OutfitPreviewBuilder: Serving pre-rendered SOTA outfit try-on from {tryon_path}")

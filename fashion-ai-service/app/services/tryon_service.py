@@ -5,7 +5,7 @@ from pathlib import Path
 import httpx
 import asyncio
 from PIL import Image, ImageFilter, ImageOps
-from app.config import settings
+from app.config import settings, BASE_DIR
 
 logger = logging.getLogger("fashion-ai-service")
 
@@ -69,7 +69,7 @@ class VTONService:
     def get_model_path(cls, gender: str) -> Path:
         """Resolves the absolute path of the standard centered model base layer."""
         model_filename = "female_model.png" if gender == "female" else "male_model.png"
-        return settings.BASE_DIR.parent / "frontend" / "public" / "assets" / model_filename
+        return BASE_DIR.parent / "frontend" / "public" / "assets" / model_filename
 
     @classmethod
     async def _upload_to_temp_host(cls, file_path: Path) -> str:
@@ -212,7 +212,7 @@ class VTONService:
                 logger.warning(f"SOTA Fal.ai GPU Pipeline failed or unauthenticated: {e}. Trying Replicate...")
 
         # ── 2. REPLICATE IDM-VTON SOTA CLOUD API PIPELINE ───────────────────────
-        if replicate_token and not fal_key:
+        if replicate_token:
             try:
                 logger.info(f"VTONService: Hooking into Replicate IDM-VTON SOTA GPU pipeline...")
                 base_model_path = cls.get_model_path(gender)

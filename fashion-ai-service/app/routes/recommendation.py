@@ -11,7 +11,7 @@ from typing import List
 from datetime import datetime, timezone
 
 
-from app.config import settings
+from app.config import settings, BASE_DIR
 from app.database.session import get_db
 from app.database.models import ClothingItem, SavedOutfit, SavedOutfitItem, UserProfile, UserFeedback, GeneratedOutfit, GeneratedOutfitItem
 from app.schemas.recommendation import (
@@ -838,9 +838,9 @@ async def tryon_item(
             )
             
         if not os.path.isabs(path_str):
-            full_path = settings.BASE_DIR / path_str
+            full_path = BASE_DIR / path_str
             if not full_path.exists():
-                full_path = settings.BASE_DIR.parent / path_str
+                full_path = BASE_DIR.parent / path_str
             path_str = str(full_path)
 
         # Call the SOTA VTONService pipeline
